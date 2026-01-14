@@ -1,4 +1,4 @@
-import { forwardRef, useState, useMemo } from 'react';
+import { forwardRef, useState, useMemo, useEffect } from 'react';
 import { ChevronRight, ChevronDown, File, Folder, Search, MoreHorizontal, Plus, Trash2, FilePlus, Save } from 'lucide-react';
 import { useFiles, useCreateFile, useDeleteFile } from '@/hooks/useFiles';
 import type { ProjectFile } from '@/services/api';
