@@ -128,28 +128,14 @@ async def test_project_metadata_generation():
 
     try:
         import httpx
-        from autogen_core.models import ModelInfo, SystemMessage, UserMessage
-        from autogen_ext.models.openai import OpenAIChatCompletionClient
+        from autogen_core.models import SystemMessage, UserMessage
 
-        from app.core.config import settings
+        from app.core.gemini_client import Gemini3FlashChatCompletionClient
 
         http_client = httpx.AsyncClient()
 
-        model_info = ModelInfo(
-            vision=True,
-            function_calling=True,
-            json_output=True,
-            family="unknown",
-            structured_output=True,
-        )
-
-        client = OpenAIChatCompletionClient(
-            model=settings.GEMINI_MODEL,
-            base_url=settings.GEMINI_API_BASE_URL,
-            api_key=settings.GEMINI_API_KEY,
-            model_info=model_info,
-            http_client=http_client,
-        )
+        # Use centralized client
+        client = Gemini3FlashChatCompletionClient(http_client=http_client)
 
         system_prompt = """Generate project metadata as JSON with 'name' and 'description' fields."""
         user_prompt = "Create a weather app with real-time updates"

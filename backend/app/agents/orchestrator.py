@@ -8,7 +8,6 @@ from autogen_agentchat.conditions import MaxMessageTermination, TextMentionTermi
 from autogen_agentchat.messages import BaseAgentEvent, BaseChatMessage, TextMessage
 from autogen_agentchat.teams import SelectorGroupChat
 from autogen_core.model_context import BufferedChatCompletionContext
-from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 from app.agents.prompts import (
     AGENT_SYSTEM_PROMPT,
@@ -16,6 +15,7 @@ from app.agents.prompts import (
     PLANNING_AGENT_DESCRIPTION,
     PLANNING_AGENT_SYSTEM_MESSAGE,
 )
+from app.core.gemini_client import Gemini3FlashChatCompletionClient
 from app.agents.tools import (
     csv_info,
     delete_file,
@@ -78,25 +78,12 @@ class AgentOrchestrator:
             grep_search,
             run_terminal_cmd,
         ]
-        # Define model capabilities for Gemini-3 Flash
-        from autogen_core.models import ModelInfo
 
-        model_info = ModelInfo(
-            vision=True,
-            function_calling=True,
-            json_output=True,
-            family="unknown",
-            structured_output=True,
-        )
-
-        self.model_client = OpenAIChatCompletionClient(
-            model=settings.GEMINI_MODEL,
-            api_key=settings.GEMINI_API_KEY,
-            base_url=settings.GEMINI_API_BASE_URL,
+        # Create Gemini-3 Flash client with centralized configuration
+        self.model_client = Gemini3FlashChatCompletionClient(
             temperature=0.7,
-            model_info=model_info,
-            parallel_tool_calls=False,  # Disable parallel tool calls to prevent token limit issues with large files
             max_tokens=8000,  # Gemini-3 Flash max output: 8K tokens (increase to prevent "length" finish reason)
+            parallel_tool_calls=False,  # Disable parallel tool calls to prevent token limit issues with large files
         )
         # Create buffered contexts to prevent token overflow
         # Keep last 20 messages (~10 exchanges) for context

@@ -11,8 +11,9 @@ from pathlib import Path
 # Add parent directory to path to import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from autogen_core.models import ModelInfo, SystemMessage, UserMessage
-from autogen_ext.models.openai import OpenAIChatCompletionClient
+from autogen_core.models import SystemMessage, UserMessage
+
+from app.core.gemini_client import Gemini3FlashChatCompletionClient
 
 # Gemini API configuration
 GEMINI_API_KEY = "AIzaSyDE8gf1yS4QClTCr_c_GWRyJzcTuHbyCFA"
@@ -26,21 +27,9 @@ async def test_basic_completion():
     print("Test 1: Basic Text Completion")
     print("=" * 60)
 
-    # Define model capabilities
-    model_info = ModelInfo(
-        vision=True,
-        function_calling=True,
-        json_output=True,
-        family="unknown",
-        structured_output=True,
-    )
-
-    # Create client
-    client = OpenAIChatCompletionClient(
-        model=GEMINI_MODEL,
-        api_key=GEMINI_API_KEY,
-        base_url=GEMINI_BASE_URL,
-        model_info=model_info,
+    # Create client using centralized configuration
+    client = Gemini3FlashChatCompletionClient(
+        model=GEMINI_MODEL, api_key=GEMINI_API_KEY, base_url=GEMINI_BASE_URL
     )
 
     try:
@@ -75,19 +64,8 @@ async def test_system_message():
     print("Test 2: System Message + User Message")
     print("=" * 60)
 
-    model_info = ModelInfo(
-        vision=True,
-        function_calling=True,
-        json_output=True,
-        family="unknown",
-        structured_output=True,
-    )
-
-    client = OpenAIChatCompletionClient(
-        model=GEMINI_MODEL,
-        api_key=GEMINI_API_KEY,
-        base_url=GEMINI_BASE_URL,
-        model_info=model_info,
+    client = Gemini3FlashChatCompletionClient(
+        model=GEMINI_MODEL, api_key=GEMINI_API_KEY, base_url=GEMINI_BASE_URL
     )
 
     try:
@@ -128,19 +106,8 @@ async def test_json_output():
     print("Test 3: JSON Structured Output")
     print("=" * 60)
 
-    model_info = ModelInfo(
-        vision=True,
-        function_calling=True,
-        json_output=True,
-        family="unknown",
-        structured_output=True,
-    )
-
-    client = OpenAIChatCompletionClient(
-        model=GEMINI_MODEL,
-        api_key=GEMINI_API_KEY,
-        base_url=GEMINI_BASE_URL,
-        model_info=model_info,
+    client = Gemini3FlashChatCompletionClient(
+        model=GEMINI_MODEL, api_key=GEMINI_API_KEY, base_url=GEMINI_BASE_URL
     )
 
     try:
@@ -203,20 +170,8 @@ async def test_with_config():
         print(f"  Base URL: {settings.GEMINI_API_BASE_URL}")
         print(f"  API Key: {settings.GEMINI_API_KEY[:20]}...")
 
-        model_info = ModelInfo(
-            vision=True,
-            function_calling=True,
-            json_output=True,
-            family="unknown",
-            structured_output=True,
-        )
-
-        client = OpenAIChatCompletionClient(
-            model=settings.GEMINI_MODEL,
-            api_key=settings.GEMINI_API_KEY,
-            base_url=settings.GEMINI_API_BASE_URL,
-            model_info=model_info,
-        )
+        # Use centralized client - it automatically reads from settings
+        client = Gemini3FlashChatCompletionClient()
 
         messages = [UserMessage(content="Say 'Configuration test successful!' if you receive this.", source="user")]
 

@@ -3,9 +3,9 @@ import json
 import httpx
 import tiktoken
 from autogen_core.models import SystemMessage, UserMessage
-from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 from app.core.config import settings
+from app.core.gemini_client import Gemini3FlashChatCompletionClient
 
 
 class CommitMessageService:
@@ -109,24 +109,9 @@ Respond in JSON format:
         http_client = httpx.AsyncClient()
 
         try:
-            # Get model capabilities for Gemini-3 Flash
-            from autogen_core.models import ModelInfo
-
-            model_info = ModelInfo(
-                vision=True,
-                function_calling=True,
-                json_output=True,
-                family="unknown",
-                structured_output=True,
-            )
-
-            # Create Gemini-3 Flash client using AutoGen
-            client = OpenAIChatCompletionClient(
-                model=settings.GEMINI_MODEL,
-                base_url=settings.GEMINI_API_BASE_URL if settings.GEMINI_API_BASE_URL else None,
-                api_key=settings.GEMINI_API_KEY,
-                model_info=model_info,
-                http_client=http_client,
+            # Create Gemini-3 Flash client
+            client = Gemini3FlashChatCompletionClient(
+                temperature=0.3, max_tokens=500, http_client=http_client, response_format={"type": "json_object"}
             )
 
             # Create messages
@@ -135,11 +120,8 @@ Respond in JSON format:
                 UserMessage(content=user_prompt, source="user"),
             ]
 
-            # Call the model with extra parameters for Gemini-3 Flash
-            result = await client.create(
-                messages,
-                extra_create_args={"temperature": 0.3, "max_tokens": 500, "response_format": {"type": "json_object"}},
-            )
+            # Call the model
+            result = await client.create(messages)
             response_content = result.content
 
             # Handle potential code block wrapping

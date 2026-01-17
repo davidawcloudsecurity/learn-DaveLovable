@@ -5,14 +5,14 @@ from pathlib import Path
 from typing import List
 
 import httpx
-from autogen_core.models import ModelInfo, SystemMessage, UserMessage
-from autogen_ext.models.openai import OpenAIChatCompletionClient
+from autogen_core.models import SystemMessage, UserMessage
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.gemini_client import Gemini3FlashChatCompletionClient
 from app.db import get_db
 from app.schemas import (
     Project,
@@ -76,22 +76,8 @@ Remember to return ONLY the JSON object, nothing else."""
     http_client = httpx.AsyncClient()
 
     try:
-        # Define model capabilities for Gemini-3 Flash
-        model_info = ModelInfo(
-            vision=True,
-            function_calling=True,
-            json_output=True,
-            family="unknown",
-            structured_output=True,
-        )
-
-        client = OpenAIChatCompletionClient(
-            model=settings.GEMINI_MODEL,
-            base_url=settings.GEMINI_API_BASE_URL,
-            api_key=settings.GEMINI_API_KEY,
-            model_info=model_info,
-            http_client=http_client,
-        )
+        # Create Gemini-3 Flash client
+        client = Gemini3FlashChatCompletionClient(http_client=http_client)
 
         messages = [
             SystemMessage(content=system_prompt),
