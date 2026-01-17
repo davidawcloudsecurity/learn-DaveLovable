@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List
 
 import httpx
-from autogen_core.models import SystemMessage, UserMessage
+from autogen_core.models import ModelInfo, SystemMessage, UserMessage
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -72,24 +72,24 @@ User request: {user_message}
 
 Remember to return ONLY the JSON object, nothing else."""
 
-    # Call OpenAI to generate metadata
+    # Call Gemini-3 Flash to generate metadata
     http_client = httpx.AsyncClient()
 
     try:
-        # Define model capabilities for non-OpenAI models (like DeepSeek)
-        model_info = {
-            "vision": True,
-            "function_calling": True,
-            "json_output": True,
-            "family": "unknown",
-            "structured_output": True,
-        }
+        # Define model capabilities for Gemini-3 Flash
+        model_info = ModelInfo(
+            vision=True,
+            function_calling=True,
+            json_output=True,
+            family="unknown",
+            structured_output=True,
+        )
 
         client = OpenAIChatCompletionClient(
-            model=settings.OPENAI_MODEL,
-            base_url=settings.OPENAI_API_BASE_URL,
-            api_key=settings.OPENAI_API_KEY,
-            model_capabilities=model_info,
+            model=settings.GEMINI_MODEL,
+            base_url=settings.GEMINI_API_BASE_URL,
+            api_key=settings.GEMINI_API_KEY,
+            model_info=model_info,
             http_client=http_client,
         )
 

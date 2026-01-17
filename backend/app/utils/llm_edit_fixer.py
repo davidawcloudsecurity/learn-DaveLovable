@@ -84,12 +84,22 @@ async def _llm_fix_edit(
     http_client = httpx.AsyncClient()
 
     try:
-        # Use OpenAI client with settings from app config
+        # Use Gemini-3 Flash client with settings from app config
+        from autogen_core.models import ModelInfo
+
+        model_info = ModelInfo(
+            vision=True,
+            function_calling=True,
+            json_output=True,
+            family="unknown",
+            structured_output=True,
+        )
+
         client = OpenAIChatCompletionClient(
-            model=settings.OPENAI_MODEL,
-            base_url=settings.OPENAI_API_BASE_URL,
-            api_key=settings.OPENAI_API_KEY,
-            model_capabilities=settings.get_model_capabilities(),
+            model=settings.GEMINI_MODEL,
+            base_url=settings.GEMINI_API_BASE_URL,
+            api_key=settings.GEMINI_API_KEY,
+            model_info=model_info,
             http_client=http_client,
             response_format={"type": "json_object"},
         )

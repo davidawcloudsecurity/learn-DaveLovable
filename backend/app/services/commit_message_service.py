@@ -109,21 +109,23 @@ Respond in JSON format:
         http_client = httpx.AsyncClient()
 
         try:
-            # Get model capabilities
-            model_info = {
-                "vision": True,
-                "function_calling": True,
-                "json_output": True,
-                "family": "unknown",
-                "structured_output": True,
-            }
+            # Get model capabilities for Gemini-3 Flash
+            from autogen_core.models import ModelInfo
 
-            # Create OpenAI client using AutoGen
+            model_info = ModelInfo(
+                vision=True,
+                function_calling=True,
+                json_output=True,
+                family="unknown",
+                structured_output=True,
+            )
+
+            # Create Gemini-3 Flash client using AutoGen
             client = OpenAIChatCompletionClient(
-                model=settings.OPENAI_MODEL,
-                base_url=settings.OPENAI_API_BASE_URL if settings.OPENAI_API_BASE_URL else None,
-                api_key=settings.OPENAI_API_KEY,
-                model_capabilities=model_info,
+                model=settings.GEMINI_MODEL,
+                base_url=settings.GEMINI_API_BASE_URL if settings.GEMINI_API_BASE_URL else None,
+                api_key=settings.GEMINI_API_KEY,
+                model_info=model_info,
                 http_client=http_client,
             )
 
@@ -133,7 +135,7 @@ Respond in JSON format:
                 UserMessage(content=user_prompt, source="user"),
             ]
 
-            # Call the model with extra parameters for OpenAI
+            # Call the model with extra parameters for Gemini-3 Flash
             result = await client.create(
                 messages,
                 extra_create_args={"temperature": 0.3, "max_tokens": 500, "response_format": {"type": "json_object"}},

@@ -78,22 +78,25 @@ class AgentOrchestrator:
             grep_search,
             run_terminal_cmd,
         ]
-        model_info = {
-            "vision": True,
-            "function_calling": True,
-            "json_output": True,
-            "family": "unknown",
-            "structured_output": True,
-        }
+        # Define model capabilities for Gemini-3 Flash
+        from autogen_core.models import ModelInfo
+
+        model_info = ModelInfo(
+            vision=True,
+            function_calling=True,
+            json_output=True,
+            family="unknown",
+            structured_output=True,
+        )
 
         self.model_client = OpenAIChatCompletionClient(
-            model=settings.OPENAI_MODEL,
-            api_key=settings.OPENAI_API_KEY,
-            base_url=settings.OPENAI_API_BASE_URL,
+            model=settings.GEMINI_MODEL,
+            api_key=settings.GEMINI_API_KEY,
+            base_url=settings.GEMINI_API_BASE_URL,
             temperature=0.7,
             model_info=model_info,
             parallel_tool_calls=False,  # Disable parallel tool calls to prevent token limit issues with large files
-            max_tokens=8000,  # DeepSeek max output: 8K tokens (increase to prevent "length" finish reason)
+            max_tokens=8000,  # Gemini-3 Flash max output: 8K tokens (increase to prevent "length" finish reason)
         )
         # Create buffered contexts to prevent token overflow
         # Keep last 20 messages (~10 exchanges) for context
