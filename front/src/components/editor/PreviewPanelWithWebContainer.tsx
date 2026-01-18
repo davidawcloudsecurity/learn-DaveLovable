@@ -595,7 +595,7 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
 
         {/* Console */}
         {showConsole && (
-          <div className="h-64 border-t border-border/50 bg-[#0d1117] flex flex-col">
+          <div className="h-40 border-t border-border/50 bg-[#0d1117] flex flex-col">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
               <div className="flex items-center gap-4">
                 <span className="text-xs font-medium text-foreground">Console</span>

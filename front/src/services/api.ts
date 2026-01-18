@@ -43,6 +43,7 @@ export interface ChatMessage {
   content: string;
   message_metadata?: string;
   agent_interactions?: AgentInteraction[];
+  attachments?: FileAttachment[];
   created_at: string;
 }
 
@@ -264,7 +265,7 @@ export const chatApi = {
       onStart?: (data: { session_id: number; user_message_id: number }) => void;
       onAgentInteraction?: (interaction: AgentInteraction) => void;
       onFilesReady?: (data: { message: string; project_id: number }) => void;
-      onGitCommit?: (data: { success: boolean; message?: string; full_message?: string; error?: string; commit_count?: number }) => void;
+      onGitCommit?: (data: { success: boolean; message?: string; full_message?: string; error?: string; commit_count?: number; commit_hash?: string }) => void;
       onReloadPreview?: (data: { tool_call_count: number; message: string }) => void;
       onComplete?: (data: SendChatMessageResponse) => void;
       onError?: (error: string) => void;

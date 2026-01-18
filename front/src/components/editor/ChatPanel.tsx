@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Send, Sparkles, User, Bot, Paperclip, Image as ImageIcon, FileText, X, Loader2 } from 'lucide-react';
+import { Send, Sparkles, User, Bot, Paperclip, Image as ImageIcon, FileText, X, Loader2, GitCommit, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useChatSession, useChatSessions } from '@/hooks/useChat';
 import { chatApi } from '@/services/api';
@@ -34,13 +34,21 @@ interface FileAttachment {
   data?: string; // Base64 data for sending to backend
 }
 
+interface GitCommitData {
+  success: boolean;
+  message: string;
+  commit_hash?: string;
+  commit_count?: number;
+}
+
 interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
   agent_interactions?: AgentInteractionData[];
   attachments?: FileAttachment[];  // Support multimodal messages
+  git_commit?: GitCommitData;  // Git commit information
 }
 
 const initialMessages: Message[] = [
@@ -139,31 +147,82 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
       scrollToBottom();
     }, [messages]);
 
-    // Load messages from session (only on initial load, not during streaming)
+    // Load messages from session and git commits (only on initial load, not during streaming)
     useEffect(() => {
-      if (session?.messages && !isStreaming) {
-        const loadedMessages: Message[] = session.messages.map((msg) => ({
-          id: msg.id.toString(),
-          role: msg.role,
-          content: msg.content,
-          timestamp: new Date(msg.created_at),
-          agent_interactions: msg.agent_interactions || [],
-        }));
+      const loadMessagesAndCommits = async () => {
+        if (session?.messages && !isStreaming) {
+          const loadedMessages: Message[] = session.messages.map((msg) => ({
+            id: msg.id.toString(),
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.created_at),
+            agent_interactions: msg.agent_interactions || [],
+            attachments: msg.attachments || [],
+          }));
 
-        // CRITICAL: Only reload if we don't have more messages locally
-        // This prevents overwriting local state with stale server data
-        const serverMessageCount = loadedMessages.length;
-        const localMessageCount = messages.length - initialMessages.length; // Exclude initial message
+          // Load git commits and convert them to system messages
+          try {
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}/projects/${projectId}/git/history?limit=100`);
+            if (response.ok) {
+              const commits = await response.json();
 
-        if (serverMessageCount > localMessageCount) {
-          console.log('[ChatPanel] Loading messages from session (server has more messages)');
-          setMessages([...initialMessages, ...loadedMessages]);
-        } else {
-          console.log('[ChatPanel] Skipping message reload - local state is up to date');
-          console.log(`  Server: ${serverMessageCount} messages, Local: ${localMessageCount} messages`);
+              // Convert ALL commits to system messages (we'll show them all in chronological order)
+              const commitMessages: Message[] = commits.commits.map((commit: any) => ({
+                id: `commit-${commit.hash}`,
+                role: 'system' as const,
+                content: commit.message.split('\n')[0], // First line of commit message
+                timestamp: new Date(commit.date),
+                git_commit: {
+                  success: true,
+                  message: commit.message.split('\n')[0],
+                  commit_hash: commit.hash,
+                  commit_count: commits.total_commits,
+                },
+              }));
+
+              // Merge messages and commits, sort by timestamp
+              const allMessages = [...loadedMessages, ...commitMessages].sort(
+                (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+              );
+
+              // CRITICAL: Only reload if we don't have more messages locally
+              // This prevents overwriting local state with stale server data
+              const serverMessageCount = allMessages.length;
+              const localMessageCount = messages.length - initialMessages.length; // Exclude initial message
+
+              if (serverMessageCount > localMessageCount) {
+                console.log('[ChatPanel] Loading messages and commits from session (server has more)');
+                // If we have no messages yet, show initial message, otherwise show sorted history
+                if (allMessages.length === 0) {
+                  setMessages(initialMessages);
+                } else {
+                  setMessages(allMessages);
+                }
+              } else {
+                console.log('[ChatPanel] Skipping message reload - local state is up to date');
+                console.log(`  Server: ${serverMessageCount} messages, Local: ${localMessageCount} messages`);
+              }
+            }
+          } catch (error) {
+            console.error('[ChatPanel] Failed to load git commits:', error);
+            // Fallback: just load messages without commits
+            const serverMessageCount = loadedMessages.length;
+            const localMessageCount = messages.length - initialMessages.length;
+
+            if (serverMessageCount > localMessageCount) {
+              console.log('[ChatPanel] Loading messages from session (without commits)');
+              if (loadedMessages.length === 0) {
+                setMessages(initialMessages);
+              } else {
+                setMessages(loadedMessages);
+              }
+            }
+          }
         }
-      }
-    }, [session, isStreaming, messages.length]);
+      };
+
+      loadMessagesAndCommits();
+    }, [session, isStreaming, messages.length, projectId]);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -661,18 +720,33 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
             onGitCommit: (data) => {
               console.log('[ChatPanel] Git commit event:', data);
 
-              if (data.success) {
+              if (data.success && data.commit_hash) {
+                // Add commit message to chat
+                const commitMessage: Message = {
+                  id: `commit-${Date.now()}`,
+                  role: 'system',
+                  content: data.message || 'Changes committed',
+                  timestamp: new Date(),
+                  git_commit: {
+                    success: true,
+                    message: data.message || 'Changes committed',
+                    commit_hash: data.commit_hash,
+                    commit_count: data.commit_count
+                  }
+                };
+
+                setMessages((prev) => [...prev, commitMessage]);
+
                 toast({
-                  title: "Git Commit Created",
+                  title: "✅ Git Commit Created",
                   description: data.message || "Changes have been committed to git.",
                   duration: 3000,
                 });
-              } else {
+              } else if (!data.success) {
                 toast({
-                  title: "Git Commit Failed",
-                  description: data.error || "Failed to create git commit.",
-                  variant: "destructive",
-                  duration: 5000,
+                  title: "Git Commit",
+                  description: data.message || "No changes to commit",
+                  duration: 2000,
                 });
               }
             },
@@ -831,7 +905,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
     ];
 
     const formatTime = (date: Date) => {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleString(); // Show full date and time for debugging
     };
 
     const [viewMode, setViewMode] = useState<'chat' | 'visual'>('chat');
@@ -871,6 +945,42 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
 
       // Auto-send the message
       handleSend(message);
+    };
+
+    const handleUndoCommit = async (commitHash: string) => {
+      try {
+        // Call backend API to revert the commit
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}/projects/${projectId}/git/restore/${commitHash}`, {
+          method: 'POST',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to revert commit');
+        }
+
+        await response.json();
+
+        // Show success message
+        toast({
+          title: 'Commit Reverted',
+          description: `Successfully reverted commit ${commitHash.substring(0, 7)}`,
+        });
+
+        // Reload files to reflect the reverted changes
+        queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) });
+
+        // Trigger preview reload
+        if (onReloadPreview) {
+          onReloadPreview();
+        }
+      } catch (error) {
+        console.error('Error reverting commit:', error);
+        toast({
+          title: 'Revert Failed',
+          description: error instanceof Error ? error.message : 'Failed to revert commit',
+          variant: 'destructive',
+        });
+      }
     };
 
     return (
@@ -939,30 +1049,81 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
-                >
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${message.role === 'user'
-                      ? 'bg-primary/20'
-                      : 'bg-gradient-to-br from-primary to-purple-600'
-                      }`}
-                  >
-                    {message.role === 'user' ? (
-                      <User className="w-4 h-4 text-primary" />
-                    ) : (
-                      <Bot className="w-4 h-4 text-primary-foreground" />
-                    )}
-                  </div>
-                  <div className={`flex flex-col gap-1 ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+              {messages.map((message) => {
+                // Special rendering for git commit messages
+                if (message.role === 'system' && message.git_commit) {
+                  const commit = message.git_commit;
+                  return (
                     <div
-                      className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed ${message.role === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                        : 'bg-muted/30 text-foreground rounded-tl-sm border border-border/30'
+                      key={message.id}
+                      className="flex gap-3 items-start"
+                    >
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-green-500/20">
+                        <GitCommit className="w-4 h-4 text-green-500" />
+                      </div>
+                      <div className="flex-1 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold text-green-500">Git Commit</span>
+                              {commit.commit_hash && (
+                                <code className="text-[10px] bg-green-500/10 px-1.5 py-0.5 rounded font-mono text-green-400">
+                                  {commit.commit_hash.substring(0, 7)}
+                                </code>
+                              )}
+                              <span className="text-[10px] text-muted-foreground">
+                                {message.timestamp.toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-sm text-foreground">{commit.message}</p>
+                            {commit.commit_count !== undefined && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Total commits: {commit.commit_count}
+                              </p>
+                            )}
+                          </div>
+                          {commit.commit_hash && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-orange-500 hover:text-orange-400 hover:bg-orange-500/10"
+                              onClick={() => handleUndoCommit(commit.commit_hash!)}
+                            >
+                              <Undo2 className="w-3 h-3 mr-1" />
+                              Undo
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Regular user/assistant message rendering
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${message.role === 'user'
+                        ? 'bg-primary/20'
+                        : 'bg-gradient-to-br from-primary to-purple-600'
                         }`}
                     >
+                      {message.role === 'user' ? (
+                        <User className="w-4 h-4 text-primary" />
+                      ) : (
+                        <Bot className="w-4 h-4 text-primary-foreground" />
+                      )}
+                    </div>
+                    <div className={`flex flex-col gap-1 ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+                      <div
+                        className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed ${message.role === 'user'
+                          ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                          : 'bg-muted/30 text-foreground rounded-tl-sm border border-border/30'
+                          }`}
+                      >
                       {message.role === 'assistant' ? (
                         <>
                           {/* Agent Interactions */}
@@ -1124,7 +1285,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                     </span>
                   </div>
                 </div>
-              ))}
+              );
+              })}
 
               {isStreaming && (
                 <div className="flex gap-3">

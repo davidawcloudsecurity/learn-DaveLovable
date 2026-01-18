@@ -1,4 +1,3 @@
-import asyncio
 from io import BytesIO
 import logging
 from datetime import datetime
@@ -840,65 +839,90 @@ Please analyze the request, create a plan if needed, and implement the solution.
             }
             logger.info(f"📁 [Files Ready] ✅ files_ready event SENT - Files written to filesystem, ready for frontend download")
 
-            # AUTO-COMMIT: Create Git commit in background (non-blocking)
-            # Send immediate notification that commit is starting
-            yield {
-                "type": "git_commit",
-                "data": {
-                    "success": True,
-                    "message": "Creating commit...",
-                    "commit_count": 0,  # Will be updated when commit completes
-                },
-            }
+            # AUTO-COMMIT: Create Git commit synchronously so we can send the result to frontend
+            commit_hash = None
+            commit_message_title = None
+            try:
+                logger.info("🔄 Creating automatic Git commit...")
 
-            # Start background task for commit (non-blocking)
-            async def background_commit():
-                """Background task to create git commit without blocking response"""
-                try:
-                    logger.info("🔄 [Background] Creating automatic Git commit...")
+                # Get the git diff to see what changed
+                diff_output = GitService.get_diff(project_id)
 
-                    # Get the git diff to see what changed
-                    diff_output = GitService.get_diff(project_id)
+                if diff_output and diff_output.strip():
+                    # Generate commit message using LLM
+                    commit_info = await CommitMessageService.generate_commit_message(
+                        diff=diff_output, user_request=chat_request.message
+                    )
 
-                    if diff_output and diff_output.strip():
-                        # Generate commit message using LLM
-                        commit_info = await CommitMessageService.generate_commit_message(
-                            diff=diff_output, user_request=chat_request.message
-                        )
+                    # Combine title and body for full commit message
+                    full_commit_message = f"{commit_info['title']}\n\n{commit_info['body']}"
+                    commit_message_title = commit_info['title']
 
-                        # Combine title and body for full commit message
-                        full_commit_message = f"{commit_info['title']}\n\n{commit_info['body']}"
+                    # Create the commit (synchronous git operation)
+                    commit_success = GitService.commit_changes(
+                        project_id=project_id,
+                        message=full_commit_message,
+                        files=None,  # Commit all changes
+                    )
 
-                        # Create the commit (synchronous git operation)
-                        commit_success = GitService.commit_changes(
-                            project_id=project_id,
-                            message=full_commit_message,
-                            files=None,  # Commit all changes
-                        )
+                    if commit_success:
+                        logger.info(f"✅ Git commit created: {commit_info['title']}")
 
-                        if commit_success:
-                            logger.info(f"✅ [Background] Git commit created: {commit_info['title']}")
+                        # Get the latest commit hash
+                        commits = GitService.get_commit_history(project_id, limit=1)
+                        if commits:
+                            commit_hash = commits[0]['hash']
+                            logger.info(f"📝 Commit hash: {commit_hash}")
 
-                            # Get commit count (excluding initial commit)
-                            commits = GitService.get_commit_history(project_id, limit=100)
-                            commit_count = len(commits)
-                            logger.info(f"📊 [Background] Total commits in project: {commit_count}")
+                        # Get commit count
+                        all_commits = GitService.get_commit_history(project_id, limit=100)
+                        commit_count = len(all_commits)
+                        logger.info(f"📊 Total commits in project: {commit_count}")
 
-                            # Check if this is the first commit for screenshot
-                            if commit_count == 2:
-                                logger.info("=" * 80)
-                                logger.info("📸 FIRST COMMIT DETECTED (Background)")
-                                logger.info("📸 Screenshot will be captured by frontend from WebContainer")
-                                logger.info("=" * 80)
-                        else:
-                            logger.warning("⚠️  [Background] Git commit failed or no changes to commit")
+                        # Send commit success event to frontend
+                        yield {
+                            "type": "git_commit",
+                            "data": {
+                                "success": True,
+                                "message": commit_message_title,
+                                "commit_hash": commit_hash,
+                                "commit_count": commit_count,
+                            },
+                        }
+
+                        # Check if this is the first commit for screenshot
+                        if commit_count == 2:
+                            logger.info("=" * 80)
+                            logger.info("📸 FIRST COMMIT DETECTED")
+                            logger.info("📸 Screenshot will be captured by frontend from WebContainer")
+                            logger.info("=" * 80)
                     else:
-                        logger.info("ℹ️  [Background] No changes detected for Git commit")
-                except Exception as e:
-                    logger.error(f"❌ [Background] Error creating auto-commit: {e}")
-
-            # Launch background task without awaiting it
-            asyncio.create_task(background_commit())
+                        logger.warning("⚠️ Git commit failed or no changes to commit")
+                        yield {
+                            "type": "git_commit",
+                            "data": {
+                                "success": False,
+                                "message": "No changes to commit",
+                            },
+                        }
+                else:
+                    logger.info("ℹ️ No changes detected for Git commit")
+                    yield {
+                        "type": "git_commit",
+                        "data": {
+                            "success": False,
+                            "message": "No changes to commit",
+                        },
+                    }
+            except Exception as e:
+                logger.error(f"❌ Error creating auto-commit: {e}")
+                yield {
+                    "type": "git_commit",
+                    "data": {
+                        "success": False,
+                        "message": f"Error: {str(e)}",
+                    },
+                }
 
             # Trigger WebContainer reload after agent completes
             logger.info("🔄 Triggering WebContainer reload (agent finished)")
