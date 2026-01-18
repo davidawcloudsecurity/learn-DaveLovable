@@ -543,7 +543,7 @@ const Editor = () => {
         {/* Chat Panel */}
         {showChat && (
           <>
-            <ResizablePanel defaultSize={20} minSize={15} maxSize={40}>
+            <ResizablePanel defaultSize={35} minSize={25} maxSize={35}>
               <div className="h-full relative">
                 <ChatPanel
                   ref={chatPanelRef}

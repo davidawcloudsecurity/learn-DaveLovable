@@ -958,13 +958,29 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
           throw new Error('Failed to revert commit');
         }
 
-        await response.json();
+        const result = await response.json();
 
         // Show success message
         toast({
           title: 'Commit Reverted',
           description: `Successfully reverted commit ${commitHash.substring(0, 7)}`,
         });
+
+        // Add the new restore commit to the chat
+        if (result.commit_hash) {
+          const restoreCommitMessage: Message = {
+            id: `commit-${result.commit_hash}`,
+            role: 'system',
+            content: result.message,
+            timestamp: new Date(), // Current time
+            git_commit: {
+              success: true,
+              message: result.message,
+              commit_hash: result.commit_hash,
+            }
+          };
+          setMessages((prev) => [...prev, restoreCommitMessage]);
+        }
 
         // Reload files to reflect the reverted changes
         queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) });
@@ -984,7 +1000,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
     };
 
     return (
-      <div ref={containerRef} className="h-full flex flex-col bg-background/80">
+      <div ref={containerRef} className="h-full flex flex-col bg-background/80 overflow-x-hidden">
         {/* Header */}
         <div className="p-4 border-b border-border/50 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -1048,7 +1064,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
             )}
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
               {messages.map((message) => {
                 // Special rendering for git commit messages
                 if (message.role === 'system' && message.git_commit) {
@@ -1061,7 +1077,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                       <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-green-500/20">
                         <GitCommit className="w-4 h-4 text-green-500" />
                       </div>
-                      <div className="flex-1 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                      <div className="max-w-[70%] bg-green-500/10 border border-green-500/30 rounded-lg p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -1213,7 +1229,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
 
                           {/* Final Response */}
                           {message.content && (
-                            <div className="prose prose-sm prose-invert max-w-none markdown-content">
+                            <div className="prose prose-sm prose-invert max-w-none markdown-content overflow-hidden break-words">
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                                 rehypePlugins={[rehypeHighlight]}
