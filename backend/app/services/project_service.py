@@ -204,10 +204,11 @@ class ProjectService:
 
     @staticmethod
     def apply_visual_edits(
-        db: Session, project_id: int, owner_id: int, filepath: str, element_selector: str, style_changes: dict
+        db: Session, project_id: int, owner_id: int, filepath: str, element_selector: str,
+        style_changes: dict = None, class_name: str = None
     ) -> dict:
         """
-        Apply visual style changes directly to a component file.
+        Apply visual style changes and/or className changes directly to a component file.
 
         Args:
             db: Database session
@@ -215,7 +216,8 @@ class ProjectService:
             owner_id: User ID
             filepath: Path to the file to edit (e.g., 'src/components/Button.tsx')
             element_selector: CSS-like selector or element tag name
-            style_changes: Dict of style properties to apply (e.g., {'color': '#fff', 'backgroundColor': '#000'})
+            style_changes: (Optional) Dict of style properties to apply (e.g., {'color': '#fff', 'backgroundColor': '#000'})
+            class_name: (Optional) New className string to replace the existing one
 
         Returns:
             Dict with success status and updated file info
@@ -231,14 +233,24 @@ class ProjectService:
         if not content:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"File not found: {filepath}")
 
-        # Convert style_changes to Tailwind classes or inline styles
-        modified_content = ProjectService._apply_styles_to_jsx(content, element_selector, style_changes)
+        modified_content = content
+        changes_applied = {}
+
+        # Apply style changes if provided
+        if style_changes:
+            modified_content = ProjectService._apply_styles_to_jsx(modified_content, element_selector, style_changes)
+            changes_applied['styles'] = style_changes
+
+        # Apply className changes if provided
+        if class_name is not None:
+            modified_content = ProjectService._apply_classname_to_jsx(modified_content, element_selector, class_name)
+            changes_applied['className'] = class_name
 
         if modified_content == content:
             # No changes made
             return {
                 "success": False,
-                "message": "No matching element found or styles already applied",
+                "message": "No matching element found or changes already applied",
                 "filepath": filepath,
             }
 
@@ -246,15 +258,14 @@ class ProjectService:
         FileSystemService.write_file(project_id, filepath, modified_content)
 
         # Commit to Git
-        GitService.commit_changes(
-            project_id, f"Visual edit: Apply styles to {element_selector} in {filepath}", [filepath]
-        )
+        commit_msg = f"Visual edit: Apply changes to {element_selector} in {filepath}"
+        GitService.commit_changes(project_id, commit_msg, [filepath])
 
         return {
             "success": True,
             "message": f"Applied visual edits to {filepath}",
             "filepath": filepath,
-            "styles_applied": style_changes,
+            "changes_applied": changes_applied,
         }
 
     @staticmethod
@@ -281,37 +292,124 @@ class ProjectService:
 
         react_styles = {to_camel_case(k): v for k, v in style_changes.items()}
 
-        # Build style string for inline styles
-        style_string = ", ".join([f"{k}: '{v}'" for k, v in react_styles.items()])
+        # Pattern to find the FIRST JSX opening tag with the given element name
+        # This matches: <tagname ... > or <tagname ... />
+        # We use a more careful approach to avoid breaking JSX syntax
+        tag_pattern = rf"<{element_selector}(?:\s+[^>]*?)?"
 
-        # Pattern to find JSX elements with the given tag name
-        # Matches: <Button ... > or <Button ... />
-        tag_pattern = rf"(<{element_selector}(?:\s+[^>]*?)?)((?:\s+style={{[^}}]*}})?)((?:\s+[^>]*?)?(?:>|/>))"
+        # Find the first occurrence
+        match = re.search(tag_pattern, content)
+        if not match:
+            return content
 
-        def replace_style(match):
-            opening = match.group(1)  # <Button ...
-            existing_style = match.group(2)  # existing style={{...}}
-            closing = match.group(3)  # ... > or />
+        tag_start = match.start()
+        tag_end_pattern = r"(?:>|/>)"
 
-            if existing_style:
-                # Merge with existing styles
-                # Extract existing style object content
-                style_content_match = re.search(r"style={{([^}}]*)}}", existing_style)
-                if style_content_match:
-                    existing_style_content = style_content_match.group(1).strip()
-                    # Merge styles (new styles override existing ones)
-                    merged_styles = f"{existing_style_content}, {style_string}"
-                    new_style = f" style={{{{{merged_styles}}}}}"
-                else:
-                    new_style = f" style={{{{{style_string}}}}}"
-            else:
-                # Add new style attribute
-                new_style = f" style={{{{{style_string}}}}}"
+        # Find where this tag ends (> or />)
+        tag_end_match = re.search(tag_end_pattern, content[tag_start:])
+        if not tag_end_match:
+            return content
 
-            return f"{opening}{new_style}{closing}"
+        tag_full_end = tag_start + tag_end_match.end()
+        tag_content = content[tag_start:tag_full_end]
 
-        # Apply the replacement
-        modified_content = re.sub(tag_pattern, replace_style, content, count=1)
+        # Check if there's already a style attribute
+        existing_style_match = re.search(r'style=\{\{([^}]*)\}\}', tag_content)
+
+        if existing_style_match:
+            # Extract existing style properties
+            existing_style_str = existing_style_match.group(1).strip()
+
+            # Parse existing styles into a dict
+            existing_styles = {}
+            if existing_style_str:
+                # Split by comma, handling quoted values
+                style_pairs = re.findall(r"(\w+):\s*'([^']*)'", existing_style_str)
+                for prop, val in style_pairs:
+                    existing_styles[prop] = val
+
+            # Merge new styles (new styles override existing ones)
+            existing_styles.update(react_styles)
+
+            # Build new style string
+            new_style_string = ", ".join([f"{k}: '{v}'" for k, v in existing_styles.items()])
+            new_style_attr = f"style={{{{{new_style_string}}}}}"
+
+            # Replace the old style attribute with the new one
+            new_tag_content = re.sub(r'style=\{\{[^}]*\}\}', new_style_attr, tag_content)
+        else:
+            # No existing style attribute - add it
+            # Build style string
+            style_string = ", ".join([f"{k}: '{v}'" for k, v in react_styles.items()])
+            new_style_attr = f" style={{{{{style_string}}}}}"
+
+            # Find a good place to insert it - right after the tag name
+            # Insert after the tag name and any whitespace
+            insert_pos = len(f"<{element_selector}")
+            new_tag_content = tag_content[:insert_pos] + new_style_attr + tag_content[insert_pos:]
+
+        # Replace the original tag with the modified one
+        modified_content = content[:tag_start] + new_tag_content + content[tag_full_end:]
+
+        return modified_content
+
+    @staticmethod
+    def _apply_classname_to_jsx(content: str, element_selector: str, class_name: str) -> str:
+        """
+        Apply className changes to JSX/TSX content.
+        Replaces the className attribute value.
+
+        Args:
+            content: File content
+            element_selector: Element tag name (e.g., 'button', 'div', 'Button')
+            class_name: New className string
+
+        Returns:
+            Modified content with className applied
+        """
+        import re
+
+        # Pattern to find the FIRST JSX opening tag with the given element name
+        tag_pattern = rf"<{element_selector}(?:\s+[^>]*?)?"
+
+        # Find the first occurrence
+        match = re.search(tag_pattern, content)
+        if not match:
+            return content
+
+        tag_start = match.start()
+        tag_end_pattern = r"(?:>|/>)"
+
+        # Find where this tag ends (> or />)
+        tag_end_match = re.search(tag_end_pattern, content[tag_start:])
+        if not tag_end_match:
+            return content
+
+        tag_full_end = tag_start + tag_end_match.end()
+        tag_content = content[tag_start:tag_full_end]
+
+        # Check if there's already a className attribute
+        # Matches: className="..." or className='...' or className={...}
+        existing_classname_match = re.search(r'className=(?:"([^"]*)"|\'([^\']*)\'|\{([^}]*)\})', tag_content)
+
+        if existing_classname_match:
+            # Replace the existing className attribute
+            new_classname_attr = f'className="{class_name}"'
+            new_tag_content = re.sub(
+                r'className=(?:"[^"]*"|\'[^\']*\'|\{[^}]*\})',
+                new_classname_attr,
+                tag_content
+            )
+        else:
+            # No existing className attribute - add it
+            new_classname_attr = f' className="{class_name}"'
+
+            # Insert after the tag name and any whitespace
+            insert_pos = len(f"<{element_selector}")
+            new_tag_content = tag_content[:insert_pos] + new_classname_attr + tag_content[insert_pos:]
+
+        # Replace the original tag with the modified one
+        modified_content = content[:tag_start] + new_tag_content + content[tag_full_end:]
 
         return modified_content
 

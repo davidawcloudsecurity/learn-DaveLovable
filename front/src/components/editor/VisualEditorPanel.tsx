@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, ChevronDown, Wand2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, ChevronDown, Wand2, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,99 @@ import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { projectApi } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
+
+interface DragInputProps {
+    value: number;
+    onChange: (value: number) => void;
+    label?: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    unit?: string;
+}
+
+const DragInput: React.FC<DragInputProps> = ({
+    value,
+    onChange,
+    label,
+    min = 0,
+    max = 999,
+    step = 1,
+    unit = 'px'
+}) => {
+    const [isDragging, setIsDragging] = useState(false);
+    const [localValue, setLocalValue] = useState(value);
+    const startXRef = useRef(0);
+    const startValueRef = useRef(0);
+
+    useEffect(() => {
+        setLocalValue(value);
+    }, [value]);
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+        startXRef.current = e.clientX;
+        startValueRef.current = localValue;
+        document.body.style.cursor = 'ew-resize';
+        document.body.style.userSelect = 'none';
+    };
+
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            // Calculate sensitivity based on modifier keys
+            let sensitivity = 5; // Default: 5px mouse = 1 unit
+            if (e.shiftKey) sensitivity = 1; // Shift: faster (1px = 1 unit)
+            if (e.altKey) sensitivity = 20; // Alt: slower (20px = 1 unit)
+
+            const delta = Math.floor((e.clientX - startXRef.current) / sensitivity) * step;
+            const newValue = Math.max(min, Math.min(max, startValueRef.current + delta));
+            setLocalValue(newValue);
+            onChange(newValue);
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+            document.body.style.cursor = 'default';
+            document.body.style.userSelect = 'auto';
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging, onChange, min, max, step]);
+
+    return (
+        <div className="relative">
+            {label && (
+                <div className="text-[10px] text-muted-foreground uppercase text-center mb-1">
+                    {label}
+                </div>
+            )}
+            <div
+                className={`
+                    h-9 px-2 flex items-center justify-center
+                    bg-neutral-900 border border-neutral-700 rounded-md
+                    cursor-ew-resize select-none
+                    hover:bg-neutral-800 transition-colors
+                    ${isDragging ? 'bg-primary/20 border-primary' : ''}
+                `}
+                onMouseDown={handleMouseDown}
+                title="Click and drag to adjust value (Shift=faster, Alt=slower)"
+            >
+                <span className="text-xs font-mono">
+                    {localValue}{unit}
+                </span>
+            </div>
+        </div>
+    );
+};
 
 interface ColorPickerProps {
     value: string;
@@ -95,6 +188,7 @@ interface VisualEditorPanelProps {
     selectedElementId?: string;
     selectedElementTagName?: string;
     selectedElementFilepath?: string;
+    selectedElementClassName?: string;
     initialStyles?: Record<string, string>;
     onSave?: (styles: Record<string, string>) => void;
     projectId: number;
@@ -108,6 +202,7 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
     selectedElementId,
     selectedElementTagName,
     selectedElementFilepath,
+    selectedElementClassName,
     initialStyles = {},
     onSave,
     projectId,
@@ -117,11 +212,32 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
     const [customPrompt, setCustomPrompt] = useState('');
     const [modifiedStyles, setModifiedStyles] = useState<Record<string, string>>({});
     const [isSaving, setIsSaving] = useState(false);
+    const [editedClassName, setEditedClassName] = useState(selectedElementClassName || '');
 
-    // Reset modified styles when selection changes
+    // Spacing values
+    const [marginTop, setMarginTop] = useState(0);
+    const [marginRight, setMarginRight] = useState(0);
+    const [marginBottom, setMarginBottom] = useState(0);
+    const [marginLeft, setMarginLeft] = useState(0);
+    const [paddingTop, setPaddingTop] = useState(0);
+    const [paddingRight, setPaddingRight] = useState(0);
+    const [paddingBottom, setPaddingBottom] = useState(0);
+    const [paddingLeft, setPaddingLeft] = useState(0);
+
+    // Reset modified styles and className when selection changes
     useEffect(() => {
         setModifiedStyles({});
-    }, [selectedElementId]);
+        setEditedClassName(selectedElementClassName || '');
+        // Reset spacing values
+        setMarginTop(0);
+        setMarginRight(0);
+        setMarginBottom(0);
+        setMarginLeft(0);
+        setPaddingTop(0);
+        setPaddingRight(0);
+        setPaddingBottom(0);
+        setPaddingLeft(0);
+    }, [selectedElementId, selectedElementClassName]);
 
     const handleStyleChange = (property: string, value: string) => {
         setModifiedStyles(prev => ({
@@ -147,10 +263,13 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
             return;
         }
 
-        if (Object.keys(modifiedStyles).length === 0) {
+        const hasStyleChanges = Object.keys(modifiedStyles).length > 0;
+        const hasClassNameChanges = editedClassName !== selectedElementClassName;
+
+        if (!hasStyleChanges && !hasClassNameChanges) {
             toast({
                 title: "No changes",
-                description: "No style changes to save",
+                description: "No changes to save",
                 variant: "destructive",
             });
             return;
@@ -178,15 +297,24 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
             console.log('[VisualEditor] Original path:', selectedElementFilepath);
             console.log('[VisualEditor] Cleaned path:', relativePath);
 
-            const result = await projectApi.applyVisualEdit(projectId, {
+            const payload: any = {
                 filepath: relativePath,
                 element_selector: selectedElementTagName,
-                style_changes: modifiedStyles,
-            });
+            };
+
+            if (hasStyleChanges) {
+                payload.style_changes = modifiedStyles;
+            }
+
+            if (hasClassNameChanges) {
+                payload.class_name = editedClassName;
+            }
+
+            const result = await projectApi.applyVisualEdit(projectId, payload);
 
             if (result.success) {
                 toast({
-                    title: "Styles applied",
+                    title: "Changes applied",
                     description: `Successfully updated ${selectedElementTagName} in ${selectedElementFilepath}`,
                 });
 
@@ -195,8 +323,9 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
                     onReloadPreview();
                 }
 
-                // Clear modified styles after successful save
+                // Clear modified styles and reset className after successful save
                 setModifiedStyles({});
+                setEditedClassName(editedClassName); // Keep the new className as the baseline
 
                 if (onSave) {
                     onSave(modifiedStyles);
@@ -220,7 +349,7 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
         }
     };
 
-    const hasChanges = Object.keys(modifiedStyles).length > 0;
+    const hasChanges = Object.keys(modifiedStyles).length > 0 || editedClassName !== selectedElementClassName;
 
     return (
         <div className="flex-1 min-h-0 flex flex-col bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -279,39 +408,173 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
 
                 <Separator />
 
+                {/* Typography - Only show for text elements */}
+                {selectedElementTagName && ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'a', 'button', 'label'].includes(selectedElementTagName.toLowerCase()) && (
+                    <>
+                        <div className="space-y-4">
+                            <h3 className="font-medium text-sm text-foreground/80">Typography</h3>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                {/* Font size */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-normal">Font size</Label>
+                                    <Select onValueChange={(val) => handleStyleChange('fontSize', val)}>
+                                        <SelectTrigger className="h-8 text-xs">
+                                            <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="0.75rem">Extra Small (12px)</SelectItem>
+                                            <SelectItem value="0.875rem">Small (14px)</SelectItem>
+                                            <SelectItem value="1rem">Body (16px)</SelectItem>
+                                            <SelectItem value="1.125rem">Large (18px)</SelectItem>
+                                            <SelectItem value="1.25rem">Extra Large (20px)</SelectItem>
+                                            <SelectItem value="1.5rem">2XL (24px)</SelectItem>
+                                            <SelectItem value="1.875rem">3XL (30px)</SelectItem>
+                                            <SelectItem value="2.25rem">4XL (36px)</SelectItem>
+                                            <SelectItem value="3rem">5XL (48px)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Font weight */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-normal">Font weight</Label>
+                                    <Select onValueChange={(val) => handleStyleChange('fontWeight', val)}>
+                                        <SelectTrigger className="h-8 text-xs">
+                                            <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="300">Light</SelectItem>
+                                            <SelectItem value="400">Normal</SelectItem>
+                                            <SelectItem value="500">Medium</SelectItem>
+                                            <SelectItem value="600">Semibold</SelectItem>
+                                            <SelectItem value="700">Bold</SelectItem>
+                                            <SelectItem value="800">Extra Bold</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            {/* Text alignment */}
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-normal">Alignment</Label>
+                                <div className="flex border border-neutral-700 rounded-md overflow-hidden">
+                                    <button
+                                        className="flex-1 bg-neutral-800 hover:bg-neutral-700 py-2 flex justify-center transition-colors"
+                                        onClick={() => handleStyleChange('textAlign', 'left')}
+                                        title="Align Left"
+                                    >
+                                        <AlignLeft className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        className="flex-1 bg-neutral-800 hover:bg-neutral-700 py-2 flex justify-center transition-colors border-l border-neutral-700"
+                                        onClick={() => handleStyleChange('textAlign', 'center')}
+                                        title="Align Center"
+                                    >
+                                        <AlignCenter className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        className="flex-1 bg-neutral-800 hover:bg-neutral-700 py-2 flex justify-center transition-colors border-l border-neutral-700"
+                                        onClick={() => handleStyleChange('textAlign', 'right')}
+                                        title="Align Right"
+                                    >
+                                        <AlignRight className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        className="flex-1 bg-neutral-800 hover:bg-neutral-700 py-2 flex justify-center transition-colors border-l border-neutral-700"
+                                        onClick={() => handleStyleChange('textAlign', 'justify')}
+                                        title="Justify"
+                                    >
+                                        <AlignJustify className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator />
+                    </>
+                )}
+
                 {/* Spacing */}
                 <div className="space-y-4">
                     <h3 className="font-medium text-sm text-foreground/80">Spacing</h3>
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         {/* Margin */}
                         <div>
-                            <Label className="text-xs font-normal mb-1.5 block">Margin</Label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="relative">
-                                    <Input
-                                        className="h-8 text-xs pr-6"
-                                        placeholder="All"
-                                        onChange={(e) => handleStyleChange('margin', e.target.value)}
-                                    />
-                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">px</span>
-                                </div>
-                                {/* Simplified for demo, ordinarily would have 4 inputs or a lock toggle */}
+                            <Label className="text-xs font-normal mb-2 block">Margin</Label>
+                            <div className="grid grid-cols-4 gap-2">
+                                <DragInput
+                                    label="T"
+                                    value={marginTop}
+                                    onChange={(val) => {
+                                        setMarginTop(val);
+                                        handleStyleChange('marginTop', `${val}px`);
+                                    }}
+                                />
+                                <DragInput
+                                    label="R"
+                                    value={marginRight}
+                                    onChange={(val) => {
+                                        setMarginRight(val);
+                                        handleStyleChange('marginRight', `${val}px`);
+                                    }}
+                                />
+                                <DragInput
+                                    label="B"
+                                    value={marginBottom}
+                                    onChange={(val) => {
+                                        setMarginBottom(val);
+                                        handleStyleChange('marginBottom', `${val}px`);
+                                    }}
+                                />
+                                <DragInput
+                                    label="L"
+                                    value={marginLeft}
+                                    onChange={(val) => {
+                                        setMarginLeft(val);
+                                        handleStyleChange('marginLeft', `${val}px`);
+                                    }}
+                                />
                             </div>
                         </div>
 
                         {/* Padding */}
                         <div>
-                            <Label className="text-xs font-normal mb-1.5 block">Padding</Label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="relative">
-                                    <Input
-                                        className="h-8 text-xs pr-6"
-                                        placeholder="All"
-                                        onChange={(e) => handleStyleChange('padding', e.target.value)}
-                                    />
-                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">px</span>
-                                </div>
+                            <Label className="text-xs font-normal mb-2 block">Padding</Label>
+                            <div className="grid grid-cols-4 gap-2">
+                                <DragInput
+                                    label="T"
+                                    value={paddingTop}
+                                    onChange={(val) => {
+                                        setPaddingTop(val);
+                                        handleStyleChange('paddingTop', `${val}px`);
+                                    }}
+                                />
+                                <DragInput
+                                    label="R"
+                                    value={paddingRight}
+                                    onChange={(val) => {
+                                        setPaddingRight(val);
+                                        handleStyleChange('paddingRight', `${val}px`);
+                                    }}
+                                />
+                                <DragInput
+                                    label="B"
+                                    value={paddingBottom}
+                                    onChange={(val) => {
+                                        setPaddingBottom(val);
+                                        handleStyleChange('paddingBottom', `${val}px`);
+                                    }}
+                                />
+                                <DragInput
+                                    label="L"
+                                    value={paddingLeft}
+                                    onChange={(val) => {
+                                        setPaddingLeft(val);
+                                        handleStyleChange('paddingLeft', `${val}px`);
+                                    }}
+                                />
                             </div>
                         </div>
                     </div>
@@ -418,6 +681,28 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
                         </Select>
                     </div>
                 </div>
+
+                <Separator />
+
+                {/* Advanced - className editor */}
+                <details open className="space-y-4">
+                    <summary className="cursor-pointer font-medium text-sm text-foreground/80 hover:text-foreground transition-colors">
+                        Advanced
+                    </summary>
+
+                    <div className="space-y-1.5 pt-2">
+                        <Label className="text-xs font-normal">Classes</Label>
+                        <Textarea
+                            value={editedClassName}
+                            onChange={(e) => setEditedClassName(e.target.value)}
+                            className="min-h-[100px] text-xs font-mono bg-neutral-900/50 border-neutral-700"
+                            placeholder="e.g., text-sm lg:text-base text-foreground/80 mb-6"
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                            Edit the CSS classes directly. Changes will be applied when you save.
+                        </p>
+                    </div>
+                </details>
             </div>
 
             {/* Footer / Custom Agent Request */}

@@ -539,14 +539,15 @@ def upload_project_thumbnail(project_id: int, data: dict = Body(...), db: Sessio
 @router.post("/{project_id}/visual-edit")
 def apply_visual_edit(project_id: int, edit_data: dict = Body(...), db: Session = Depends(get_db)):
     """
-    Apply visual style changes directly to a component file.
+    Apply visual style changes and/or className changes directly to a component file.
 
     Args:
         project_id: The project ID
         edit_data: JSON body containing:
             - filepath: Path to the file to edit (e.g., 'src/App.tsx')
             - element_selector: Element tag name (e.g., 'button', 'div', 'Button')
-            - style_changes: Dict of CSS properties (e.g., {'color': '#fff', 'backgroundColor': '#000'})
+            - style_changes: (Optional) Dict of CSS properties (e.g., {'color': '#fff', 'backgroundColor': '#000'})
+            - class_name: (Optional) New className string to replace the existing one
 
     Returns:
         Success status and updated file info
@@ -554,11 +555,17 @@ def apply_visual_edit(project_id: int, edit_data: dict = Body(...), db: Session 
     filepath = edit_data.get("filepath")
     element_selector = edit_data.get("element_selector")
     style_changes = edit_data.get("style_changes")
+    class_name = edit_data.get("class_name")
 
-    if not filepath or not element_selector or not style_changes:
-        raise HTTPException(status_code=400, detail="filepath, element_selector, and style_changes are required")
+    if not filepath or not element_selector:
+        raise HTTPException(status_code=400, detail="filepath and element_selector are required")
 
-    result = ProjectService.apply_visual_edits(db, project_id, MOCK_USER_ID, filepath, element_selector, style_changes)
+    if not style_changes and class_name is None:
+        raise HTTPException(status_code=400, detail="At least one of style_changes or class_name must be provided")
+
+    result = ProjectService.apply_visual_edits(
+        db, project_id, MOCK_USER_ID, filepath, element_selector, style_changes, class_name
+    )
 
     return result
 

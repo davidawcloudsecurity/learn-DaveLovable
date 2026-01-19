@@ -383,9 +383,9 @@ const Editor = () => {
       queryClient.invalidateQueries({ queryKey: ['project', Number(projectId)] });
     }
 
-    // Use handleRefresh for proper WebContainer reload
+    // Use reload() to properly reinitialize WebContainer and re-apply visual mode
     if (previewPanelRef.current) {
-      previewPanelRef.current.handleRefresh();
+      previewPanelRef.current.reload();
     }
   };
 
@@ -475,7 +475,7 @@ const Editor = () => {
         {/* Chat Panel */}
         {showChat && (
           <>
-            <ResizablePanel defaultSize={35} minSize={30} maxSize={35}>
+            <ResizablePanel defaultSize={35} minSize={20} maxSize={35}>
               <div className="h-full relative">
                 <ChatPanel
                   ref={chatPanelRef}
