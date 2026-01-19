@@ -189,10 +189,12 @@ interface VisualEditorPanelProps {
     selectedElementTagName?: string;
     selectedElementFilepath?: string;
     selectedElementClassName?: string;
+    selectedElementSelector?: string;  // Full CSS selector for precise targeting
     initialStyles?: Record<string, string>;
     onSave?: (styles: Record<string, string>) => void;
     projectId: number;
     onReloadPreview?: () => void;
+    onFileUpdate?: (files: Array<{ path: string, content: string }>) => void;  // For HMR updates
 }
 
 export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
@@ -203,10 +205,12 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
     selectedElementTagName,
     selectedElementFilepath,
     selectedElementClassName,
+    selectedElementSelector,
     initialStyles = {},
     onSave,
     projectId,
-    onReloadPreview
+    onReloadPreview,
+    onFileUpdate
 }) => {
     const { toast } = useToast();
     const [customPrompt, setCustomPrompt] = useState('');
@@ -224,11 +228,87 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
     const [paddingBottom, setPaddingBottom] = useState(0);
     const [paddingLeft, setPaddingLeft] = useState(0);
 
-    // Reset modified styles and className when selection changes
+    // Store previous element info to auto-save before switching
+    const prevElementRef = useRef<{
+        id?: string;
+        tagName?: string;
+        filepath?: string;
+        className?: string;
+        selector?: string;
+        modifiedStyles: Record<string, string>;
+        editedClassName: string;
+    } | null>(null);
+
+    // Auto-save when switching elements (before resetting state)
     useEffect(() => {
+        const hasChanges = Object.keys(modifiedStyles).length > 0 || editedClassName !== (prevElementRef.current?.className || '');
+
+        if (prevElementRef.current && hasChanges && prevElementRef.current.filepath) {
+            console.log('[VisualEditor] Auto-saving changes before switching element...');
+
+            // Save the previous element's changes asynchronously
+            const saveChanges = async () => {
+                try {
+                    const relativePath = prevElementRef.current!.filepath!.replace(/^\/home\/[^/]+\//, '');
+                    let elementSelector = prevElementRef.current!.selector || prevElementRef.current!.tagName || 'div';
+
+                    const payload: any = {
+                        filepath: relativePath,
+                        element_selector: elementSelector,
+                        original_class_name: prevElementRef.current!.className,
+                    };
+
+                    const hasStyleChanges = Object.keys(modifiedStyles).length > 0;
+                    const hasClassNameChanges = editedClassName !== (prevElementRef.current!.className || '');
+
+                    if (hasStyleChanges) {
+                        payload.style_changes = modifiedStyles;
+                    }
+
+                    if (hasClassNameChanges) {
+                        payload.class_name = editedClassName;
+                    }
+
+                    console.log('[VisualEditor] Auto-saving payload:', payload);
+
+                    const result = await projectApi.applyVisualEdit(projectId, payload);
+
+                    if (result.success) {
+                        console.log('[VisualEditor] Auto-save successful');
+
+                        // Push file update to WebContainer for instant HMR (no full reload!)
+                        if (onFileUpdate && result.modified_content) {
+                            console.log('[VisualEditor] Pushing file update for HMR...');
+                            onFileUpdate([{
+                                path: relativePath,
+                                content: result.modified_content
+                            }]);
+                        }
+                    } else {
+                        console.warn('[VisualEditor] Auto-save failed:', result.message);
+                    }
+                } catch (error) {
+                    console.error('[VisualEditor] Auto-save error:', error);
+                }
+            };
+
+            saveChanges();
+        }
+
+        // Store current element info for next switch
+        prevElementRef.current = {
+            id: selectedElementId,
+            tagName: selectedElementTagName,
+            filepath: selectedElementFilepath,
+            className: selectedElementClassName,
+            selector: selectedElementSelector,
+            modifiedStyles: { ...modifiedStyles },
+            editedClassName: editedClassName
+        };
+
+        // Reset state for new element
         setModifiedStyles({});
         setEditedClassName(selectedElementClassName || '');
-        // Reset spacing values
         setMarginTop(0);
         setMarginRight(0);
         setMarginBottom(0);
@@ -237,7 +317,7 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
         setPaddingRight(0);
         setPaddingBottom(0);
         setPaddingLeft(0);
-    }, [selectedElementId, selectedElementClassName]);
+    }, [selectedElementId, selectedElementSelector]);
 
     const handleStyleChange = (property: string, value: string) => {
         setModifiedStyles(prev => ({
@@ -297,19 +377,29 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
             console.log('[VisualEditor] Original path:', selectedElementFilepath);
             console.log('[VisualEditor] Cleaned path:', relativePath);
 
-            // Build a more specific selector to target the exact element
-            // Use className if available to create a unique selector
-            let elementSelector = selectedElementTagName;
-            if (selectedElementClassName && !hasClassNameChanges) {
-                // Only use className as selector if we're not changing it
-                // Use the first class for better specificity
-                const firstClass = selectedElementClassName.split(' ')[0];
-                if (firstClass) {
-                    elementSelector = `${selectedElementTagName}.${firstClass}`;
+            // Use the provided CSS selector if available (most accurate)
+            // Otherwise build a selector from available data
+            let elementSelector: string;
+
+            if (selectedElementSelector) {
+                // Use the precise selector from the element selection
+                elementSelector = selectedElementSelector;
+                console.log('[VisualEditor] Using provided selector:', elementSelector);
+            } else {
+                // Fallback: build selector from available data
+                elementSelector = selectedElementTagName;
+                if (selectedElementClassName && !hasClassNameChanges) {
+                    // Only use className as selector if we're not changing it
+                    // Use the first class for better specificity
+                    const firstClass = selectedElementClassName.split(' ')[0];
+                    if (firstClass) {
+                        elementSelector = `${selectedElementTagName}.${firstClass}`;
+                    }
+                } else if (selectedElementId) {
+                    // Use ID if available (most specific)
+                    elementSelector = `${selectedElementTagName}#${selectedElementId}`;
                 }
-            } else if (selectedElementId) {
-                // Use ID if available (most specific)
-                elementSelector = `${selectedElementTagName}#${selectedElementId}`;
+                console.log('[VisualEditor] Built selector:', elementSelector);
             }
 
             const payload: any = {

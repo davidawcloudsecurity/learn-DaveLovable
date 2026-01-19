@@ -1,4 +1,7 @@
 from typing import List, Optional
+import sys
+import os
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -6,6 +9,23 @@ from sqlalchemy.orm import Session
 from app.models import Project, ProjectFile
 from app.schemas import ProjectCreate, ProjectFileCreate, ProjectUpdate
 from app.services.filesystem_service import FileSystemService
+
+# Simple inline debug logger
+def debug_log(message):
+    """Write debug message to both stdout and file"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    full_message = f"[{timestamp}] {message}"
+
+    # Write to file
+    log_file = os.path.join(os.path.dirname(__file__), '..', '..', 'visual_editor.log')
+    try:
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(full_message + '\n')
+    except Exception as e:
+        print(f"Log file error: {e}")
+
+    # Write to stdout
+    print(full_message)
 
 
 class ProjectService:
@@ -225,6 +245,13 @@ class ProjectService:
 
         from app.services.git_service import GitService
 
+        print(f"\n[SERVICE] ========== APPLY VISUAL EDITS ==========")
+        print(f"[SERVICE] Project ID: {project_id}")
+        print(f"[SERVICE] Filepath: {filepath}")
+        print(f"[SERVICE] Element selector: {element_selector}")
+        print(f"[SERVICE] Style changes: {style_changes}")
+        print(f"[SERVICE] Class name: {class_name}")
+
         # Verify ownership
         ProjectService.get_project(db, project_id, owner_id)
 
@@ -233,6 +260,8 @@ class ProjectService:
         if not content:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"File not found: {filepath}")
 
+        print(f"[SERVICE] File read successfully, length: {len(content)} characters")
+
         modified_content = content
         changes_applied = {}
 
@@ -240,9 +269,11 @@ class ProjectService:
         original_class_name = None
         if hasattr(ProjectService, 'current_edit_data'):
             original_class_name = getattr(ProjectService, 'current_edit_data', {}).get('original_class_name')
+            print(f"[SERVICE] Original class name: {original_class_name}")
 
         # Apply style changes if provided
         if style_changes:
+            print(f"[SERVICE] Applying style changes...")
             modified_content = ProjectService._apply_styles_to_jsx(
                 modified_content, element_selector, style_changes, original_class_name
             )
@@ -250,6 +281,7 @@ class ProjectService:
 
         # Apply className changes if provided
         if class_name is not None:
+            print(f"[SERVICE] Applying className changes...")
             modified_content = ProjectService._apply_classname_to_jsx(
                 modified_content, element_selector, class_name, original_class_name
             )
@@ -275,17 +307,19 @@ class ProjectService:
             "message": f"Applied visual edits to {filepath}",
             "filepath": filepath,
             "changes_applied": changes_applied,
+            "modified_content": modified_content,  # Include for HMR file push
         }
 
     @staticmethod
     def _apply_styles_to_jsx(content: str, element_selector: str, style_changes: dict, original_class_name: str = None) -> str:
         """
         Apply style changes to JSX/TSX content.
-        Supports specific selectors: tagname, tagname.classname, or tagname#id
+        Supports selectors: tagname, tagname.classname, tagname#id, nth-child, nth-of-type, and complex selectors
 
         Args:
             content: File content
-            element_selector: Element selector (e.g., 'button', 'div.container', 'Button#main')
+            element_selector: Element selector (e.g., 'button', 'div.container', 'Button#main',
+                            'div:nth-child(2)', 'div:nth-of-type(2)', 'div.container > button:nth-of-type(2)')
             style_changes: Dict of CSS properties to apply
             original_class_name: Original className to match (for more specificity)
 
@@ -302,23 +336,59 @@ class ProjectService:
 
         react_styles = {to_camel_case(k): v for k, v in style_changes.items()}
 
-        # Parse selector to extract tag name, class, and/or id
+        # Parse selector - extract the last element in the selector chain
+        # For complex selectors like "div.container > button:nth-child(2)",
+        # we want to target "button:nth-child(2)"
+        debug_log("=" * 60)
+        debug_log("[SERVICE] APPLY STYLES")
+        debug_log(f"[SERVICE] Original selector: {element_selector}")
+        debug_log(f"[SERVICE] Original class name: {original_class_name}")
+
+        selector_parts = element_selector.split()
+        if len(selector_parts) > 1:
+            # Take the last part (the actual target element)
+            element_selector = selector_parts[-1]
+            debug_log(f"[SERVICE] Extracted target element: {element_selector}")
+
+        # Parse selector to extract tag name, class, id, and nth-child/nth-of-type
         tag_name = element_selector
         class_filter = None
         id_filter = None
+        nth_child = None
+
+        # Extract nth-child or nth-of-type if present (treat them the same)
+        nth_match = re.search(r':nth-(?:child|of-type)\((\d+)\)', element_selector)
+        if nth_match:
+            nth_child = int(nth_match.group(1))
+            element_selector = element_selector[:nth_match.start()]  # Remove :nth-child/:nth-of-type from selector
+            debug_log(f"[SERVICE] Found nth position: {nth_child}")
 
         if '.' in element_selector:
             tag_name, class_filter = element_selector.split('.', 1)
+            debug_log(f"[SERVICE] Tag: {tag_name}, Class filter: {class_filter}")
         elif '#' in element_selector:
             tag_name, id_filter = element_selector.split('#', 1)
+            debug_log(f"[SERVICE] Tag: {tag_name}, ID filter: {id_filter}")
+        else:
+            tag_name = element_selector
+            debug_log(f"[SERVICE] Tag: {tag_name} (no class/id filter)")
+
+        # IMPORTANT: If we have original_class_name and nth_child,
+        # prioritize filtering by className FIRST, then selecting nth element from that filtered set
+        # This is more accurate than searching globally for nth-of-type
 
         # Pattern to find JSX opening tag with the given element name
         tag_pattern = rf"<{tag_name}(?:\s+[^>]*?)?"
 
-        # Find all occurrences and filter by className or id
+        # Find all occurrences and filter by className, id, and nth-child
         matches = list(re.finditer(tag_pattern, content))
+        debug_log(f"[SERVICE] Found {len(matches)} total matches for tag '{tag_name}'")
 
-        target_match = None
+        # Build list of candidate matches
+        # Strategy: If original_class_name exists, use it as PRIMARY filter
+        # Then apply nth-child to that filtered set (not globally)
+        candidates = []
+        use_original_class = original_class_name and not class_filter and not id_filter
 
         for match in matches:
             tag_start = match.start()
@@ -331,37 +401,55 @@ class ProjectService:
             tag_content = content[tag_start:tag_full_end]
 
             # Check if this match has the required className or id
+            match_passes = False
+
             if class_filter:
                 # Look for className attribute containing the filter
                 class_match = re.search(r'className=(?:"([^"]*)"|{`([^`]*)`}|{\'([^\']*)\'})', tag_content)
                 if class_match:
                     class_value = class_match.group(1) or class_match.group(2) or class_match.group(3)
                     if class_filter in class_value.split():
-                        target_match = (match, tag_start, tag_full_end, tag_content)
-                        break
+                        match_passes = True
             elif id_filter:
                 # Look for id attribute
                 id_match = re.search(rf'id=(?:"{id_filter}"|{{\'{id_filter}\'}})', tag_content)
                 if id_match:
-                    target_match = (match, tag_start, tag_full_end, tag_content)
-                    break
-            elif original_class_name:
-                # Try to match by original className if provided
+                    match_passes = True
+            elif use_original_class:
+                # PRIORITY: Use original className as primary filter
+                # This is more reliable than global nth-of-type matching
                 class_match = re.search(r'className=(?:"([^"]*)"|{`([^`]*)`}|{\'([^\']*)\'})', tag_content)
                 if class_match:
                     class_value = class_match.group(1) or class_match.group(2) or class_match.group(3)
+                    # Match if the className is exactly the same
                     if class_value == original_class_name:
-                        target_match = (match, tag_start, tag_full_end, tag_content)
-                        break
+                        match_passes = True
+                        debug_log(f"[SERVICE] Found element with matching className: {class_value[:50]}...")
             else:
-                # No filter, use first match
-                target_match = (match, tag_start, tag_full_end, tag_content)
-                break
+                # No filter, all matches are candidates
+                match_passes = True
+
+            if match_passes:
+                candidates.append((match, tag_start, tag_full_end, tag_content))
+
+        debug_log(f"[SERVICE] Found {len(candidates)} candidate matches after filtering")
+
+        # If nth-child is specified, use it to select the right match
+        target_match = None
+        if nth_child is not None and len(candidates) >= nth_child:
+            target_match = candidates[nth_child - 1]  # nth-child is 1-indexed
+            debug_log(f"[SERVICE] Selected match #{nth_child} from {len(candidates)} candidates")
+        elif len(candidates) > 0:
+            target_match = candidates[0]  # Use first match if no nth-child
+            debug_log(f"[SERVICE] Using first match (no nth-child specified)")
 
         if not target_match:
+            debug_log(f"[SERVICE] ERROR: No target match found! Selector: {element_selector}, OriginalClass: {original_class_name}")
             return content
 
         _, tag_start, tag_full_end, tag_content = target_match
+        debug_log(f"[SERVICE] Target element: {tag_content[:100]}...")
+        debug_log(f"[SERVICE] Applying styles: {react_styles}")
 
         # Check if there's already a style attribute
         existing_style_match = re.search(r'style=\{\{([^}]*)\}\}', tag_content)
@@ -407,11 +495,12 @@ class ProjectService:
     def _apply_classname_to_jsx(content: str, element_selector: str, class_name: str, original_class_name: str = None) -> str:
         """
         Apply className changes to JSX/TSX content.
-        Supports specific selectors: tagname, tagname.classname, or tagname#id
+        Supports selectors: tagname, tagname.classname, tagname#id, nth-child, nth-of-type, and complex selectors
 
         Args:
             content: File content
-            element_selector: Element selector (e.g., 'button', 'div.container', 'Button#main')
+            element_selector: Element selector (e.g., 'button', 'div.container', 'Button#main',
+                            'div:nth-child(2)', 'div:nth-of-type(2)', 'div.container > button:nth-of-type(2)')
             class_name: New className string
             original_class_name: Original className to match (for more specificity)
 
@@ -420,23 +509,54 @@ class ProjectService:
         """
         import re
 
-        # Parse selector to extract tag name, class, and/or id
+        # Parse selector - extract the last element in the selector chain
+        print(f"[DEBUG] [ClassName] Original selector: {element_selector}")
+        print(f"[DEBUG] [ClassName] Original class name: {original_class_name}")
+
+        selector_parts = element_selector.split()
+        if len(selector_parts) > 1:
+            element_selector = selector_parts[-1]
+            print(f"[DEBUG] [ClassName] Extracted target element: {element_selector}")
+
+        # Parse selector to extract tag name, class, id, and nth-child/nth-of-type
         tag_name = element_selector
         class_filter = None
         id_filter = None
+        nth_child = None
+
+        # Extract nth-child or nth-of-type if present
+        nth_match = re.search(r':nth-(?:child|of-type)\((\d+)\)', element_selector)
+        if nth_match:
+            nth_child = int(nth_match.group(1))
+            element_selector = element_selector[:nth_match.start()]
+            print(f"[DEBUG] [ClassName] Found nth position: {nth_child}")
 
         if '.' in element_selector:
             tag_name, class_filter = element_selector.split('.', 1)
+            print(f"[DEBUG] [ClassName] Tag: {tag_name}, Class filter: {class_filter}")
         elif '#' in element_selector:
             tag_name, id_filter = element_selector.split('#', 1)
+            print(f"[DEBUG] [ClassName] Tag: {tag_name}, ID filter: {id_filter}")
+        else:
+            tag_name = element_selector
+            print(f"[DEBUG] [ClassName] Tag: {tag_name} (no class/id filter)")
+
+        # IMPORTANT: If we have original_class_name and nth_child,
+        # prioritize filtering by className FIRST, then selecting nth element from that filtered set
+        # This is more accurate than searching globally for nth-of-type
 
         # Pattern to find JSX opening tag with the given element name
         tag_pattern = rf"<{tag_name}(?:\s+[^>]*?)?"
 
-        # Find all occurrences and filter by className or id
+        # Find all occurrences and filter by className, id, and nth-child
         matches = list(re.finditer(tag_pattern, content))
+        print(f"[DEBUG] [ClassName] Found {len(matches)} total matches for tag '{tag_name}'")
 
-        target_match = None
+        # Build list of candidate matches
+        # Strategy: If original_class_name exists, use it as PRIMARY filter
+        # Then apply nth-child to that filtered set (not globally)
+        candidates = []
+        use_original_class = original_class_name and not class_filter and not id_filter
 
         for match in matches:
             tag_start = match.start()
@@ -449,37 +569,55 @@ class ProjectService:
             tag_content = content[tag_start:tag_full_end]
 
             # Check if this match has the required className or id
+            match_passes = False
+
             if class_filter:
                 # Look for className attribute containing the filter
                 class_match = re.search(r'className=(?:"([^"]*)"|{`([^`]*)`}|{\'([^\']*)\'})', tag_content)
                 if class_match:
                     class_value = class_match.group(1) or class_match.group(2) or class_match.group(3)
                     if class_filter in class_value.split():
-                        target_match = (match, tag_start, tag_full_end, tag_content)
-                        break
+                        match_passes = True
             elif id_filter:
                 # Look for id attribute
                 id_match = re.search(rf'id=(?:"{id_filter}"|{{\'{id_filter}\'}})', tag_content)
                 if id_match:
-                    target_match = (match, tag_start, tag_full_end, tag_content)
-                    break
-            elif original_class_name:
-                # Try to match by original className if provided
+                    match_passes = True
+            elif use_original_class:
+                # PRIORITY: Use original className as primary filter
+                # This is more reliable than global nth-of-type matching
                 class_match = re.search(r'className=(?:"([^"]*)"|{`([^`]*)`}|{\'([^\']*)\'})', tag_content)
                 if class_match:
                     class_value = class_match.group(1) or class_match.group(2) or class_match.group(3)
+                    # Match if the className is exactly the same
                     if class_value == original_class_name:
-                        target_match = (match, tag_start, tag_full_end, tag_content)
-                        break
+                        match_passes = True
+                        print(f"[DEBUG] [ClassName] Found element with matching className: {class_value[:50]}...")
             else:
-                # No filter, use first match
-                target_match = (match, tag_start, tag_full_end, tag_content)
-                break
+                # No filter, all matches are candidates
+                match_passes = True
+
+            if match_passes:
+                candidates.append((match, tag_start, tag_full_end, tag_content))
+
+        print(f"[DEBUG] [ClassName] Found {len(candidates)} candidate matches after filtering")
+
+        # If nth-child is specified, use it to select the right match
+        target_match = None
+        if nth_child is not None and len(candidates) >= nth_child:
+            target_match = candidates[nth_child - 1]  # nth-child is 1-indexed
+            print(f"[DEBUG] Selected match #{nth_child} from {len(candidates)} candidates")
+        elif len(candidates) > 0:
+            target_match = candidates[0]  # Use first match if no nth-child
+            print(f"[DEBUG] Using first match (no nth-child specified)")
 
         if not target_match:
+            print(f"[DEBUG] [ClassName] No target match found!")
             return content
 
         _, tag_start, tag_full_end, tag_content = target_match
+        print(f"[DEBUG] [ClassName] Target element: {tag_content[:100]}...")
+        print(f"[DEBUG] [ClassName] Applying className: {class_name}")
 
         # Check if there's already a className attribute
         # Matches: className="..." or className='...' or className={...}

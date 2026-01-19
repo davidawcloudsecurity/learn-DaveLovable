@@ -348,8 +348,19 @@ const VISUAL_EDITOR_SCRIPT = `
     }
 
     selectedElement = e.target;
-    selectedElement.classList.add('visual-editor-selected');
+
+    // CRITICAL: Remove ALL dynamic classes BEFORE capturing className
+    // Otherwise we send className with visual-editor-hover or visual-editor-selected
     selectedElement.classList.remove('visual-editor-hover');
+    selectedElement.classList.remove('visual-editor-selected');
+
+    // NOW get the original className (without any dynamic classes)
+    const elementId = selectedElement.id || '';
+    const tagName = selectedElement.tagName.toLowerCase();
+    const className = selectedElement.className; // Get CLEAN original className
+
+    // NOW add the selection styling
+    selectedElement.classList.add('visual-editor-selected');
 
     // Generate a unique selector
     const getSelector = (el) => {
@@ -381,9 +392,6 @@ const VISUAL_EDITOR_SCRIPT = `
       return path.join(' > ');
     };
 
-    const elementId = selectedElement.id || '';
-    const tagName = selectedElement.tagName.toLowerCase();
-    const className = selectedElement.className;
     const selector = getSelector(selectedElement);
     const innerText = selectedElement.innerText ? selectedElement.innerText.substring(0, 100) : '';
 

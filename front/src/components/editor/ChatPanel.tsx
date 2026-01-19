@@ -1141,12 +1141,14 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
             selectedElementTagName={selectedElement?.tagName}
             selectedElementFilepath={selectedElement?.source?.fileName}
             selectedElementClassName={selectedElement?.className}
+            selectedElementSelector={selectedElement?.selector}
             projectId={projectId}
             onReloadPreview={() => {
               if (onReloadPreview) {
                 onReloadPreview({ message: 'Visual edits applied' });
               }
             }}
+            onFileUpdate={onFileUpdate}
           />
         ) : (
           <>

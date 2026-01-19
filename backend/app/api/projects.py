@@ -596,10 +596,23 @@ def apply_visual_edit(project_id: int, edit_data: dict = Body(...), db: Session 
     Returns:
         Success status and updated file info
     """
+    import sys
+
+    sys.stdout.write(f"\n[API] ========== VISUAL EDIT REQUEST ==========\n")
+    sys.stdout.write(f"[API] Project: {project_id}\n")
+    sys.stdout.write(f"[API] Edit data: {edit_data}\n")
+    sys.stdout.flush()
+
     filepath = edit_data.get("filepath")
     element_selector = edit_data.get("element_selector")
     style_changes = edit_data.get("style_changes")
     class_name = edit_data.get("class_name")
+
+    sys.stdout.write(f"[API] Filepath: {filepath}\n")
+    sys.stdout.write(f"[API] Selector: {element_selector}\n")
+    sys.stdout.write(f"[API] Styles: {style_changes}\n")
+    sys.stdout.write(f"[API] ClassName: {class_name}\n")
+    sys.stdout.flush()
 
     if not filepath or not element_selector:
         raise HTTPException(status_code=400, detail="filepath and element_selector are required")

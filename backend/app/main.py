@@ -1,5 +1,6 @@
 import logging
 import sys
+import io
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import api_router
 from app.core.config import settings
 from app.db import init_db
+
+# Set UTF-8 encoding for Windows console (for child processes)
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True, errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', line_buffering=True, errors='replace')
 
 # Configure logging to show agent interactions
 logging.basicConfig(
@@ -19,6 +25,7 @@ logging.basicConfig(
 logging.getLogger("app.services.chat_service").setLevel(logging.DEBUG)
 logging.getLogger("app.agents").setLevel(logging.DEBUG)
 logging.getLogger("autogen").setLevel(logging.INFO)
+logging.getLogger("uvicorn.error").setLevel(logging.INFO)  # Show our custom logs
 
 # Create FastAPI app
 app = FastAPI(
