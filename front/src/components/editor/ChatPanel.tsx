@@ -1033,6 +1033,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
             selectedElementId={selectedElement?.elementId}
             selectedElementTagName={selectedElement?.tagName}
             selectedElementFilepath={selectedElement?.source?.fileName}
+            selectedElementClassName={selectedElement?.className}
             projectId={projectId}
             onReloadPreview={() => {
               if (onReloadPreview) {
@@ -1080,8 +1081,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                       </div>
                       <div className="max-w-[70%] bg-green-500/10 border border-green-500/30 rounded-lg p-3">
                         <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <span className="text-xs font-semibold text-green-500">Git Commit</span>
                               {commit.commit_hash && (
                                 <code className="text-[10px] bg-green-500/10 px-1.5 py-0.5 rounded font-mono text-green-400">
@@ -1092,7 +1093,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                                 {message.timestamp.toLocaleString()}
                               </span>
                             </div>
-                            <p className="text-sm text-foreground">{commit.message}</p>
+                            <p className="text-sm text-foreground break-words">{commit.message}</p>
                             {commit.commit_count !== undefined && (
                               <p className="text-xs text-muted-foreground mt-1">
                                 Total commits: {commit.commit_count}
@@ -1103,7 +1104,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 text-xs text-orange-500 hover:text-orange-400 hover:bg-orange-500/10"
+                              className="h-7 text-xs text-orange-500 hover:text-orange-400 hover:bg-orange-500/10 shrink-0"
                               onClick={() => handleUndoCommit(commit.commit_hash!)}
                             >
                               <Undo2 className="w-3 h-3 mr-1" />
