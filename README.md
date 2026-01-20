@@ -52,32 +52,13 @@ Unlike other tools, DaveLovable leverages:
 ## 🎬 Demo Videos
 
 ### 🚀 Full Platform Overview (2-3 minutes)
-[![DaveLovable Overview](docs/videos/thumbnails/overview.png)](docs/videos/overview.mp4)
+[![DaveLovable Overview](docs/videos/demo-overview.gif)
 
-**[Video should show]:**
 - Quick intro: "Build React apps with AI in minutes"
 - Create new project from landing page
 - AI generates initial landing page (show chat → agent execution → preview)
 - Quick code edit in Monaco editor
 - Switch between different device previews (mobile, tablet, desktop)
-- End result: Working app in under 3 minutes
-
----
-
-### 🤖 Multi-Agent System in Action (1-2 minutes)
-[![Multi-Agent Demo](docs/videos/thumbnails/multi-agent.png)](docs/videos/multi-agent.mp4)
-
-**[Video should show]:**
-- User request: "Create a dashboard with charts and user table"
-- **Planner Agent** breaking down the task into steps (show thought bubble)
-- **Coder Agent** executing tools in parallel:
-  - `write_file` for Dashboard.tsx (show tool execution block)
-  - `write_file` for ChartCard.tsx
-  - `write_file` for UserTable.tsx
-  - Terminal command: `npm install recharts` (if needed)
-- Real-time preview updating with HMR
-- Final commit with AI-generated message
-- Highlight: ~30 seconds from request to working dashboard
 
 ---
 
