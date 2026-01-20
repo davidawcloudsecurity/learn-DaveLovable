@@ -1091,11 +1091,23 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
         {/* Header */}
         <div className="p-4 border-b border-border/50 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => window.location.href = '/projects'}
+              className="h-8 w-8"
+              title="Back to Projects"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+            </Button>
+
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/20">
               <Sparkles className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h3 className="font-semibold text-sm">Lovable AI</h3>
+              <h3 className="font-semibold text-sm">DaveLovable AI</h3>
               <p className="text-xs text-muted-foreground">Your development assistant</p>
             </div>
           </div>
