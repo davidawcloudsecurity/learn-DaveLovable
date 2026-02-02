@@ -569,28 +569,10 @@ const Editor = () => {
                     onDownloadProject={handleDownloadProject}
                   />
 
-                  <ResizablePanelGroup id="code-preview-panel-group" direction="horizontal" className="flex-1">
-                    {/* Preview */}
-                    {(activeView === 'preview' || activeView === 'split') && (
-                      <ResizablePanel id="preview-panel" defaultSize={activeView === 'split' ? 50 : 100}>
-                        <PreviewPanel
-                          ref={previewPanelRef}
-                          projectId={Number(projectId)}
-                          isLoading={isPreviewLoading}
-                          onReload={handleCodeChange}
-                          onReportError={handleReportError}
-                          onPreviewReady={handlePreviewReady}
-                          isVisualMode={isVisualMode}
-                          onElementSelected={handleElementSelected}
-                        />
-                      </ResizablePanel>
-                    )}
-
-                    {activeView === 'split' && <ResizableHandle withHandle />}
-
+                  <ResizablePanelGroup id="code-preview-panel-group" direction="horizontal" className="flex-1" autoSaveId="editor-preview-layout">
                     {/* Code Editor */}
                     {(activeView === 'code' || activeView === 'split') && (
-                      <ResizablePanel id="code-editor-panel" defaultSize={activeView === 'split' ? 50 : 100}>
+                      <ResizablePanel id="code-editor-panel" defaultSize={activeView === 'split' ? 50 : 100} order={1}>
                         <CodeEditor
                           selectedFile={selectedFile ? { ...selectedFile, content: editedContent } : null}
                           isTyping={isTyping}
@@ -602,6 +584,24 @@ const Editor = () => {
                               if (!showChat) setShowChat(true);
                             }
                           }}
+                        />
+                      </ResizablePanel>
+                    )}
+
+                    {activeView === 'split' && <ResizableHandle withHandle />}
+
+                    {/* Preview */}
+                    {(activeView === 'preview' || activeView === 'split') && (
+                      <ResizablePanel id="preview-panel" defaultSize={activeView === 'split' ? 50 : 100} order={2}>
+                        <PreviewPanel
+                          ref={previewPanelRef}
+                          projectId={Number(projectId)}
+                          isLoading={isPreviewLoading}
+                          onReload={handleCodeChange}
+                          onReportError={handleReportError}
+                          onPreviewReady={handlePreviewReady}
+                          isVisualMode={isVisualMode}
+                          onElementSelected={handleElementSelected}
                         />
                       </ResizablePanel>
                     )}
