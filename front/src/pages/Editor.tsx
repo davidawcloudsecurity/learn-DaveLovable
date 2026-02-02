@@ -570,6 +570,24 @@ const Editor = () => {
                   />
 
                   <ResizablePanelGroup id="code-preview-panel-group" direction="horizontal" className="flex-1">
+                    {/* Preview */}
+                    {(activeView === 'preview' || activeView === 'split') && (
+                      <ResizablePanel id="preview-panel" defaultSize={activeView === 'split' ? 50 : 100}>
+                        <PreviewPanel
+                          ref={previewPanelRef}
+                          projectId={Number(projectId)}
+                          isLoading={isPreviewLoading}
+                          onReload={handleCodeChange}
+                          onReportError={handleReportError}
+                          onPreviewReady={handlePreviewReady}
+                          isVisualMode={isVisualMode}
+                          onElementSelected={handleElementSelected}
+                        />
+                      </ResizablePanel>
+                    )}
+
+                    {activeView === 'split' && <ResizableHandle withHandle />}
+
                     {/* Code Editor */}
                     {(activeView === 'code' || activeView === 'split') && (
                       <ResizablePanel id="code-editor-panel" defaultSize={activeView === 'split' ? 50 : 100}>
@@ -584,24 +602,6 @@ const Editor = () => {
                               if (!showChat) setShowChat(true);
                             }
                           }}
-                        />
-                      </ResizablePanel>
-                    )}
-
-                    {activeView === 'split' && <ResizableHandle withHandle />}
-
-                    {/* Preview */}
-                    {(activeView === 'preview' || activeView === 'split') && (
-                      <ResizablePanel id="preview-panel" defaultSize={activeView === 'split' ? 50 : 100}>
-                        <PreviewPanel
-                          ref={previewPanelRef}
-                          projectId={Number(projectId)}
-                          isLoading={isPreviewLoading}
-                          onReload={handleCodeChange}
-                          onReportError={handleReportError}
-                          onPreviewReady={handlePreviewReady}
-                          isVisualMode={isVisualMode}
-                          onElementSelected={handleElementSelected}
                         />
                       </ResizablePanel>
                     )}
