@@ -1287,7 +1287,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                         )}
                       </div>
                       <span className="text-xs font-medium text-muted-foreground">
-                        {message.role === 'user' ? 'You' : 'Lovable AI'}
+                        {message.role === 'user' ? 'You' : 'DaveLovable AI'}
                       </span>
                     </div>
                     <div className={`flex flex-col gap-1 w-full`}>
