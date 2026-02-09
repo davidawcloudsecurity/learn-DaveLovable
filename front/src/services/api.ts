@@ -293,7 +293,6 @@ export const chatApi = {
       // We can't use EventSource for POST requests, so we'll use fetch with streaming
       const url = `${API_URL}/chat/${projectId}/stream`;
 
-      console.log('[SSE] Starting stream to:', url);
 
       fetch(url, {
         method: 'POST',
@@ -304,7 +303,6 @@ export const chatApi = {
         body: JSON.stringify(data),
       })
         .then(async (response) => {
-          console.log('[SSE] Response received:', response.status, response.statusText);
 
           if (!response.ok) {
             throw new ApiError(response.status, `HTTP ${response.status}`);
@@ -318,13 +316,11 @@ export const chatApi = {
           const decoder = new TextDecoder();
           let buffer = '';
 
-          console.log('[SSE] Starting to read stream...');
 
           while (true) {
             const { done, value } = await reader.read();
 
             if (done) {
-              console.log('[SSE] Stream complete');
               resolve();
               break;
             }
@@ -332,7 +328,6 @@ export const chatApi = {
             // Decode chunk and add to buffer
             const chunk = decoder.decode(value, { stream: true });
             buffer += chunk;
-            console.log('[SSE] Received chunk:', chunk.substring(0, 100));
 
             // Process complete SSE messages (separated by \n\n)
             const lines = buffer.split('\n\n');
@@ -341,48 +336,34 @@ export const chatApi = {
             for (const line of lines) {
               // Ignore keep-alive comments (lines starting with :)
               if (line.trim().startsWith(':')) {
-                console.log('[SSE] Keep-alive heartbeat received');
                 continue;
               }
 
               if (line.trim().startsWith('data: ')) {
                 try {
                   const jsonStr = line.replace(/^data: /, '').trim();
-                  console.log('[SSE] Parsing event:', jsonStr.substring(0, 200));
                   const event: SSEEvent = JSON.parse(jsonStr);
-                  console.log('[SSE] ⚡ Event type received:', event.type);
-                  console.log('[SSE] ⚡ Full event:', JSON.stringify(event));
 
                   switch (event.type) {
                     case 'start':
-                      console.log('[SSE] Start event:', event.data);
                       callbacks.onStart?.(event.data);
                       break;
                     case 'agent_interaction':
-                      console.log('[SSE] Agent interaction:', event.data.message_type, event.data.agent_name);
                       callbacks.onAgentInteraction?.(event.data);
                       break;
                     case 'files_ready':
-                      console.log('[SSE] 📁📁📁 FILES READY EVENT RECEIVED! 📁📁📁');
-                      console.log('[SSE] 📁 Event data:', event.data);
-                      console.log('[SSE] 📁 Callback exists?', !!callbacks.onFilesReady);
                       callbacks.onFilesReady?.(event.data);
-                      console.log('[SSE] 📁 Callback invoked successfully');
                       break;
                     case 'git_commit':
-                      console.log('[SSE] Git commit event:', event.data);
                       callbacks.onGitCommit?.(event.data);
                       break;
                     case 'reload_preview':
-                      console.log('[SSE] Reload preview event:', event.data);
                       callbacks.onReloadPreview?.(event.data);
                       break;
                     case 'complete':
-                      console.log('[SSE] Complete event');
                       callbacks.onComplete?.(event.data);
                       break;
                     case 'error':
-                      console.error('[SSE] Error event:', event.data.message);
                       callbacks.onError?.(event.data.message);
                       reject(new ApiError(500, event.data.message));
                       return;

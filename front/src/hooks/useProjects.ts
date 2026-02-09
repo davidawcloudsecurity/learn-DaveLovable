@@ -89,7 +89,6 @@ export function useDeleteProject() {
     onError: (error: any, projectId) => {
       // If project not found (404), it's already deleted - invalidate cache
       if (error.response?.status === 404) {
-        console.warn(`Project ${projectId} not found - may have been already deleted`);
         queryClient.removeQueries({ queryKey: projectKeys.detail(projectId) });
         queryClient.invalidateQueries({ queryKey: projectKeys.list() });
       }

@@ -19,9 +19,7 @@ function stripAnsi(str: string): string {
  */
 export async function getWebContainer(): Promise<WebContainer> {
   if (!webcontainerInstance) {
-    console.log('[WebContainer] Booting...');
     webcontainerInstance = await WebContainer.boot();
-    console.log('[WebContainer] Ready');
   }
   return webcontainerInstance;
 }
@@ -71,9 +69,6 @@ const SCREENSHOT_HELPER_SCRIPT = `
 (function() {
   // Silent logging - don't pollute user's console
   const DEBUG = false; // Set to true only for debugging
-  const log = DEBUG ? console.log.bind(console) : () => {};
-
-  log('[Screenshot Helper] Initializing...');
 
   // Wait for app to be fully rendered before allowing screenshots
   let isAppReady = false;
@@ -251,7 +246,6 @@ const SCREENSHOT_HELPER_SCRIPT = `
       } catch (error) {
         // Only log errors - these are important
         if (DEBUG) {
-          console.error('[Screenshot Helper] Capture failed:', error);
         }
         window.parent.postMessage({
           type: 'screenshot-error',
@@ -765,7 +759,6 @@ export async function updateProjectFiles(
   }
 
   const log = (msg: string) => {
-    console.log(msg);
     if (onLog) onLog(msg);
   };
 
@@ -827,6 +820,5 @@ export async function enableVisualEditor(): Promise<void> {
       '<script src="./visual-editor-helper.js"></script></body>'
     );
     await webcontainerInstance.fs.writeFile('index.html', updatedHtml);
-    console.log('[WebContainer] Visual Editor enabled');
   }
 }

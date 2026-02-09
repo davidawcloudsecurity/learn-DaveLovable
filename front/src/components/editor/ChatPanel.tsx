@@ -202,7 +202,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               const localMessageCount = messages.length - initialMessages.length; // Exclude initial message
 
               if (serverMessageCount > localMessageCount) {
-                console.log('[ChatPanel] Loading messages and commits from session (server has more)');
                 // If we have no messages yet, show initial message, otherwise show sorted history
                 if (allMessages.length === 0) {
                   setMessages(initialMessages);
@@ -215,13 +214,11 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               }
             }
           } catch (error) {
-            console.error('[ChatPanel] Failed to load git commits:', error);
             // Fallback: just load messages without commits
             const serverMessageCount = loadedMessages.length;
             const localMessageCount = messages.length - initialMessages.length;
 
             if (serverMessageCount > localMessageCount) {
-              console.log('[ChatPanel] Loading messages from session (without commits)');
               if (loadedMessages.length === 0) {
                 setMessages(initialMessages);
               } else {
@@ -355,7 +352,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
       // Allow reload even if scheduled (we manage that manually in the callback now)
       // Only check pendingReloadRef and isStreaming for the "fallback" behavior
       if (shouldTriggerReload && !isStreaming && pendingReloadRef.current && onReloadPreview) {
-        console.log('[ChatPanel] fallback reload trigger (stream ended)');
         if (onReloadPreview && pendingReloadRef.current) {
           onReloadPreview(pendingReloadRef.current);
           pendingReloadRef.current = null;
@@ -426,7 +422,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
           description: `${newAttachments.length} image(s) ready to send`
         });
       } catch (error) {
-        console.error('[ChatPanel] Error processing images:', error);
         toast({
           title: "Error",
           description: "Failed to process images",
@@ -571,18 +566,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
         agent_interactions: [],
       };
 
-      console.log('[ChatPanel] Creating messages:', {
-        userMessage,
-        streamingMessage,
-        streamingMessageId
-      });
 
       // Add both messages in a single state update
       setMessages((prev) => {
-        console.log('[ChatPanel] Before adding messages, count:', prev.length);
         const updated = [...prev, userMessage, streamingMessage];
-        console.log('[ChatPanel] After adding messages, count:', updated.length);
-        console.log('[ChatPanel] New messages:', updated);
         return updated;
       });
 
@@ -605,7 +592,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
           attachments: filesToSend
         }).length;
 
-        console.log('[ChatPanel] Estimated payload size:', (payloadSize / 1024 / 1024).toFixed(2), 'MB');
 
         if (payloadSize > 50 * 1024 * 1024) { // 50MB limit
           toast({
@@ -637,18 +623,14 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               }
             },
             onAgentInteraction: (interaction) => {
-              console.log('[ChatPanel] Received agent interaction:', interaction);
 
               // Note: File list refetch now happens at stream completion
               // This ensures it works regardless of which tools the agent uses
 
               // Add interaction to the streaming message in real-time
               setMessages((prev) => {
-                console.log('[ChatPanel] Current messages:', prev.length);
-                console.log('[ChatPanel] Looking for message:', streamingMessageId);
                 const updated = prev.map((msg) => {
                   if (msg.id === streamingMessageId) {
-                    console.log('[ChatPanel] Found streaming message, adding interaction');
                     return {
                       ...msg,
                       agent_interactions: [
@@ -659,14 +641,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                   }
                   return msg;
                 });
-                console.log('[ChatPanel] Updated messages:', updated);
                 return updated;
               });
             },
             onFilesReady: (data) => {
-              console.log('[ChatPanel] 📁📁📁 FILES READY CALLBACK INVOKED! 📁📁📁');
-              console.log('[ChatPanel] 📁 Data received:', data);
-              console.log('[ChatPanel] 📁 Project ID:', projectId);
 
               // -------------------------------------------------------------------------
               // IMPROVED LOGIC: Trust the event! 
@@ -674,12 +652,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               // We simply force a refetch and update the UI.
               // -------------------------------------------------------------------------
 
-              console.log('[ChatPanel] 📁 Starting refresh sequence...');
 
               // CHECK FOR PUSH UPDATE (Robust Fix)
               const payload = data as any;
               if (payload.files && Array.isArray(payload.files) && payload.files.length > 0) {
-                console.log(`[ChatPanel] 🚀 Received ${data.files.length} pushed files. Updating WebContainer immediately.`);
                 if (onFileUpdate) {
                   onFileUpdate(data.files);
                   // We continue with the standard reload sequence as a backup/consistency check
@@ -699,7 +675,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
 
               const pollInterval = setInterval(async () => {
                 pollAttempts++;
-                console.log(`[ChatPanel] 📁 Refresh attempt ${pollAttempts}/${maxPollAttempts}...`);
 
                 try {
                   // Force refetch
@@ -710,7 +685,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
 
                   if (pollAttempts >= 3) {
                     clearInterval(pollInterval);
-                    console.log('[ChatPanel] 📁 Refresh sequence complete');
 
                     // Trigger onCodeChange to notify parent (important for screenshotting, etc)
                     if (onCodeChange) {
@@ -718,7 +692,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                     }
                   }
                 } catch (error) {
-                  console.error('[ChatPanel] 📁 Error during refresh:', error);
+                  console.error('[ChatPanel]  Error during refresh:', error);
                 }
               }, 500);
 
@@ -729,7 +703,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               });
             },
             onGitCommit: (data) => {
-              console.log('[ChatPanel] Git commit event:', data);
 
               if (data.success && data.commit_hash) {
                 // Add commit message to chat
@@ -774,7 +747,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               }
             },
             onReloadPreview: (data) => {
-              console.log('[ChatPanel] Reload preview event received:', data);
               pendingReloadRef.current = data;
 
               toast({
@@ -788,12 +760,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               // A single reload ensures WebContainer reflects the latest changes
 
               if (onReloadPreview && !reloadScheduledRef.current) {
-                console.log('[ChatPanel] 🔄 Scheduling single WebContainer reload...');
                 reloadScheduledRef.current = true;
 
                 // Single reload: Wait for FS to settle (2.5s is sufficient)
                 setTimeout(() => {
-                  console.log('[ChatPanel] 🔄 Executing WebContainer reload...');
                   if (onReloadPreview) {
                     onReloadPreview(data);
                   }
@@ -802,15 +772,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               }
             },
             onComplete: (data) => {
-              console.log('[ChatPanel] Complete event - updating message content');
-              console.log('[ChatPanel] Complete data:', data);
 
               // Update the streaming message with the final response
               setMessages((prev) => {
-                console.log('[ChatPanel] Before complete update, messages:', prev.length);
                 const streamingMsg = prev.find(m => m.id === streamingMessageId);
-                console.log('[ChatPanel] Streaming message before update:', streamingMsg);
-                console.log('[ChatPanel] Agent interactions count:', streamingMsg?.agent_interactions?.length || 0);
 
                 const updated = prev.map((msg) =>
                   msg.id === streamingMessageId
@@ -822,9 +787,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                 );
 
                 const updatedStreamingMsg = updated.find(m => m.id === streamingMessageId);
-                console.log('[ChatPanel] Streaming message after update:', updatedStreamingMsg);
-                console.log('[ChatPanel] Agent interactions count after:', updatedStreamingMsg?.agent_interactions?.length || 0);
-                console.log('[ChatPanel] Messages updated with final content');
                 return updated;
               });
 
@@ -838,7 +800,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               }
 
               // Clear attached files after successful send
-              console.log('[ChatPanel] Clearing attached files after successful send');
               setAttachedFiles([]);
 
               // CRITICAL FIX: Delay setIsStreaming(false) to prevent race condition
@@ -846,15 +807,12 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               // If we set isStreaming=false immediately, the useEffect will reload messages
               // from the OLD session data (DB hasn't been updated yet), overwriting our local state
               // Solution: Keep isStreaming=true for 3 seconds to block the useEffect from running
-              console.log('[ChatPanel] Keeping isStreaming=true for 3s to prevent message reload');
               setTimeout(() => {
-                console.log('[ChatPanel] Now setting isStreaming=false - safe to reload messages');
                 setIsStreaming(false);
               }, 3000);
 
               // WebContainer reload is now handled by onFilesReady callback
               // which waits for files to actually arrive before triggering reload
-              console.log('[ChatPanel] Stream complete - WebContainer reload will be triggered by onFilesReady');
 
               // Clear attached files after successful send
               setAttachedFiles(prev => {
@@ -868,7 +826,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               });
             },
             onError: (error) => {
-              console.error('Streaming error:', error);
               // Update the streaming message with error
               setMessages((prev) =>
                 prev.map((msg) =>

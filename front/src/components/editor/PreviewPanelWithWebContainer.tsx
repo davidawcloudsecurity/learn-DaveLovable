@@ -120,7 +120,6 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
         const timer = setTimeout(() => {
           if (iframeRef.current?.contentWindow) {
             // eslint-disable-next-line no-console
-            console.log(`[PreviewPanel] Sending visual-editor:toggle-mode (delay: ${delay}ms, enabled: ${isVisualMode})`);
             iframeRef.current.contentWindow.postMessage({
               type: 'visual-editor:toggle-mode',
               enabled: isVisualMode
@@ -167,35 +166,27 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
     const captureScreenshot = async (): Promise<string | null> => {
       // Wait a bit to ensure iframe is fully loaded
       if (!iframeRef.current?.contentWindow) {
-        console.error('[Screenshot] Iframe ref not available');
         return null;
       }
 
       // For WebContainer iframe (cross-origin), we can't check readyState
       // Just wait a moment to ensure it's ready
-      console.log('[Screenshot] Waiting 2s for iframe content to load...');
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       try {
-        console.log('[Screenshot] Requesting screenshot from WebContainer via postMessage...');
-        console.log('[Screenshot] Iframe URL:', iframeRef.current.src);
 
         // Create a promise that resolves when we receive the screenshot
         const screenshotPromise = new Promise<string | null>((resolve) => {
           const timeoutId = setTimeout(() => {
-            console.error('[Screenshot] Timeout waiting for response');
             cleanup();
             resolve(null);
           }, 15000); // Increased to 15 second timeout
 
           const handleMessage = (event: MessageEvent) => {
-            console.log('[Screenshot] Received message:', event.data.type, 'from:', event.origin);
             if (event.data.type === 'screenshot-captured') {
-              console.log('[Screenshot] Received screenshot from WebContainer');
               cleanup();
               resolve(event.data.data);
             } else if (event.data.type === 'screenshot-error') {
-              console.error('[Screenshot] Error from WebContainer:', event.data.error);
               cleanup();
               resolve(null);
             }
@@ -211,7 +202,6 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
           // Send capture request to iframe after listener is set up
           // Use a small delay to ensure listener is registered
           setTimeout(() => {
-            console.log('[Screenshot] Sending capture-screenshot message to iframe');
             iframeRef.current?.contentWindow?.postMessage({ type: 'capture-screenshot' }, '*');
           }, 100);
         });
@@ -225,7 +215,6 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
 
     const sendScreenshotToBackend = async (screenshotData: string) => {
       try {
-        console.log('[Screenshot] Sending to backend...');
         const response = await fetch(`${API_URL}/projects/${projectId}/thumbnail/upload`, {
           method: 'POST',
           headers: {
@@ -238,7 +227,6 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
           throw new Error(`Failed to save thumbnail: ${response.status}`);
         }
 
-        console.log('[Screenshot] Successfully saved to backend');
         addLog('log', '✓ Project thumbnail captured');
       } catch (error) {
         console.error('[Screenshot] Failed to send to backend:', error);
@@ -284,7 +272,6 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
         // Capture screenshot after preview is fully loaded (for first load)
         // Wait for iframe to be available and loaded
         setTimeout(async () => {
-          console.log('[Screenshot] Attempting to capture project thumbnail...');
 
           // Wait for iframe to be available
           let attempts = 0;
@@ -294,15 +281,12 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
           }
 
           if (!iframeRef.current) {
-            console.error('[Screenshot] Iframe ref not available after waiting');
             return;
           }
 
-          console.log('[Screenshot] Iframe ref is available, waiting 5s for screenshot helper to be ready...');
           // Wait additional time for screenshot helper to load and register listener
           await new Promise(resolve => setTimeout(resolve, 5000));
 
-          console.log('[Screenshot] Proceeding with capture');
           const screenshot = await captureScreenshot();
           if (screenshot) {
             await sendScreenshotToBackend(screenshot);
@@ -324,7 +308,6 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
 
     // Initialize browser log capture when component mounts
     useEffect(() => {
-      console.log('[PreviewPanel] Initializing browser log capture listener');
       initializeLogCapture();
     }, []);
 
@@ -375,7 +358,6 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
             setTimeout(() => {
               if (iframeRef.current?.contentWindow) {
                 // eslint-disable-next-line no-console
-                console.log(`[PreviewPanel] reload() sending visual-editor:toggle-mode (delay: ${delay}ms)`);
                 iframeRef.current.contentWindow.postMessage({
                   type: 'visual-editor:toggle-mode',
                   enabled: true
@@ -395,7 +377,6 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
         }, '*');
       },
       captureAndSendScreenshot: async () => {
-        console.log('[PreviewPanel] Manual screenshot capture requested');
         const screenshot = await captureScreenshot();
         if (screenshot) {
           await sendScreenshotToBackend(screenshot);
@@ -420,7 +401,6 @@ export const PreviewPanel = forwardRef<PreviewPanelRef, PreviewPanelProps>(
               setTimeout(() => {
                 if (iframeRef.current?.contentWindow) {
                   // eslint-disable-next-line no-console
-                  console.log(`[PreviewPanel] applyFileUpdates() sending visual-editor:toggle-mode (delay: ${delay}ms)`);
                   iframeRef.current.contentWindow.postMessage({
                     type: 'visual-editor:toggle-mode',
                     enabled: true

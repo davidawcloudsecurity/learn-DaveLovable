@@ -244,7 +244,6 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
         const hasChanges = Object.keys(modifiedStyles).length > 0 || editedClassName !== (prevElementRef.current?.className || '');
 
         if (prevElementRef.current && hasChanges && prevElementRef.current.filepath) {
-            console.log('[VisualEditor] Auto-saving changes before switching element...');
 
             // Save the previous element's changes asynchronously
             const saveChanges = async () => {
@@ -269,16 +268,13 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
                         payload.class_name = editedClassName;
                     }
 
-                    console.log('[VisualEditor] Auto-saving payload:', payload);
 
                     const result = await projectApi.applyVisualEdit(projectId, payload);
 
                     if (result.success) {
-                        console.log('[VisualEditor] Auto-save successful');
 
                         // Push file update to WebContainer for instant HMR (no full reload!)
                         if (onFileUpdate && result.modified_content) {
-                            console.log('[VisualEditor] Pushing file update for HMR...');
                             onFileUpdate([{
                                 path: relativePath,
                                 content: result.modified_content
@@ -374,8 +370,6 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
                 relativePath = relativePath.substring(1);
             }
 
-            console.log('[VisualEditor] Original path:', selectedElementFilepath);
-            console.log('[VisualEditor] Cleaned path:', relativePath);
 
             // Use the provided CSS selector if available (most accurate)
             // Otherwise build a selector from available data
@@ -384,7 +378,6 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
             if (selectedElementSelector) {
                 // Use the precise selector from the element selection
                 elementSelector = selectedElementSelector;
-                console.log('[VisualEditor] Using provided selector:', elementSelector);
             } else {
                 // Fallback: build selector from available data
                 elementSelector = selectedElementTagName;
@@ -399,7 +392,6 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
                     // Use ID if available (most specific)
                     elementSelector = `${selectedElementTagName}#${selectedElementId}`;
                 }
-                console.log('[VisualEditor] Built selector:', elementSelector);
             }
 
             const payload: any = {
@@ -426,7 +418,6 @@ export const VisualEditorPanel: React.FC<VisualEditorPanelProps> = ({
 
                 // Push file update to WebContainer for instant HMR (no full reload!)
                 if (onFileUpdate && result.modified_content) {
-                    console.log('[VisualEditor] Pushing file update for HMR...');
                     onFileUpdate([{
                         path: relativePath,
                         content: result.modified_content

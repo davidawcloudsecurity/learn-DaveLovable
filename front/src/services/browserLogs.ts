@@ -30,7 +30,6 @@ export function initializeLogCapture() {
     }
   });
 
-  console.log('[BrowserLogs] Log capture initialized (using postMessage)');
 }
 
 /**
@@ -51,7 +50,6 @@ function captureLog(type: BrowserLog['type'], message: string, stack?: string, t
     logs.shift();
   }
 
-  console.log(`[BrowserLogs] Captured ${type}:`, message);
 }
 
 /**
@@ -80,7 +78,6 @@ export function clearLogs() {
  */
 export async function sendLogsToBackend(projectId: number): Promise<void> {
   if (logs.length === 0) {
-    console.log('[BrowserLogs] No logs to send');
     return;
   }
 
@@ -97,7 +94,6 @@ export async function sendLogsToBackend(projectId: number): Promise<void> {
       throw new Error(`Failed to send logs: ${response.status} ${response.statusText}`);
     }
 
-    console.log(`[BrowserLogs] Sent ${logs.length} logs to backend`);
   } catch (error) {
     console.error('[BrowserLogs] Failed to send logs to backend:', error);
   }

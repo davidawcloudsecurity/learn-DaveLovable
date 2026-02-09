@@ -64,7 +64,7 @@ const Editor = () => {
   // Log when project files are updated (for debugging file sync timing)
   useEffect(() => {
     if (project?.files) {
-      console.log('[Editor] 🔄 Project files updated:', project.files.length, 'files');
+       console.log('[Editor] 🔄 Project files updated:', project.files.length, 'files');
       console.log('[Editor] 🔄 File list:', project.files.map(f => f.filename).join(', '));
     }
   }, [project?.files]);
@@ -119,21 +119,15 @@ const Editor = () => {
     const attachments = state?.attachments;
 
     if (initialMessage && !initialMessageSent) {
-      console.log('[Editor] Initial message detected:', initialMessage);
-      if (attachments) {
-        console.log('[Editor] Attachments detected:', attachments.length);
-      }
 
       // Wait for chat panel to be fully ready
       const timer = setTimeout(() => {
         if (chatPanelRef.current) {
-          console.log('[Editor] Sending initial message to chat panel');
           chatPanelRef.current.sendMessage(initialMessage, attachments);
           setInitialMessageSent(true);
 
           // IMPORTANT: Clear location state to prevent re-sending on page reload
           window.history.replaceState({}, document.title);
-          console.log('[Editor] Location state cleared to prevent duplicate sends');
         } else {
           console.warn('[Editor] Chat panel ref not ready yet');
         }
@@ -313,7 +307,6 @@ const Editor = () => {
   };
 
   const handlePreviewReady = (url: string) => {
-    console.log('[Editor] Preview ready with URL:', url);
     setPreviewUrl(url);
   };
 
@@ -376,7 +369,6 @@ const Editor = () => {
   };
 
   const handleReloadPreview = (data: { message: string }) => {
-    console.log('[Editor] Reload preview requested:', data);
 
     // Refetch files to update the file explorer
     if (projectId) {
@@ -408,7 +400,6 @@ const Editor = () => {
 
   const handleFileUpdate = (files: Array<{ path: string, content: string }>) => {
     if (previewPanelRef.current) {
-      console.log(`[Editor] 🚀 Pushing ${files.length} file updates to preview panel`);
       previewPanelRef.current.applyFileUpdates(files);
     }
   };
@@ -418,7 +409,6 @@ const Editor = () => {
     // commit_count == 1 is the initial "Project created" commit
     // commit_count == 2 is the first actual code commit
     if (data.success && data.commit_count === 2) {
-      console.log('[Editor] First commit detected - capturing screenshot');
       toast({
         title: "📸 Capturing project thumbnail",
         description: "Taking a screenshot of your project...",
@@ -430,7 +420,6 @@ const Editor = () => {
         if (previewPanelRef.current) {
           const success = await previewPanelRef.current.captureAndSendScreenshot();
           if (success) {
-            console.log('[Editor] Screenshot captured and saved successfully');
             toast({
               title: "✅ Thumbnail saved",
               description: "Project thumbnail has been updated",
