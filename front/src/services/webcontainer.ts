@@ -69,6 +69,7 @@ const SCREENSHOT_HELPER_SCRIPT = `
 (function() {
   // Silent logging - don't pollute user's console
   const DEBUG = false; // Set to true only for debugging
+  const log = DEBUG ? console.log.bind(console) : () => {};
 
   // Wait for app to be fully rendered before allowing screenshots
   let isAppReady = false;
@@ -107,8 +108,6 @@ const SCREENSHOT_HELPER_SCRIPT = `
   // Listen for screenshot requests from parent
   window.addEventListener('message', async (event) => {
     if (event.data.type === 'capture-screenshot') {
-      log('[Screenshot Helper] Received capture request');
-
       try {
         // Wait for app to be ready
         if (!isAppReady) {
